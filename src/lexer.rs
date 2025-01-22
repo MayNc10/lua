@@ -1,13 +1,6 @@
 //! This module implements lexer functionality
 //! It takes in a string representing a lua program and outputs a sequence of lexemes, or tokens
 
-/// TODO!
-/// We have to do recursive descent
-/// In hindside, it's pretty obvious. If we have the string '//', we don't necessarily know whether it's
-/// Two 'slash' tokens
-/// Or one 'double slask' token
-/// 
-
 pub mod comment;
 pub mod identifier;
 pub mod keyword;
