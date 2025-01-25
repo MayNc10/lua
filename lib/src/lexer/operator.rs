@@ -71,7 +71,7 @@ pub enum Operator {
 }
 
 impl Token for Operator {
-    fn parse(text: &str) -> Option<(Self, u64)> {
+    fn parse(text: &str) -> Option<(Self, usize)> {
         // parse longest first
         macros::triple_capture!{text,
             "and", Operator::LogicalAnd,
