@@ -46,7 +46,7 @@ impl Token for Keyword {
         Keyword::str_to_variant(text)
             .filter(|&(_kw, size)| 
                 text.chars().skip(size).next()
-                .is_none_or(|c| c.is_whitespace()) 
+                .is_none_or(|c| !c.is_alphanumeric() && c != '_') 
             )
     }
     fn raw(&self) -> &str {

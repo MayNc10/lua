@@ -11,7 +11,8 @@ pub enum Seperator {
     CloseCurly,
     Dot,
     Semicolon,
-    Comma
+    Comma,
+    Colon,
 }
 
 impl Token for Seperator {
@@ -26,6 +27,7 @@ impl Token for Seperator {
             "." => Some((Self::Dot, 1)),
             ";" => Some((Self::Semicolon, 1)),
             "," => Some((Self::Comma, 1)),
+            ":" => Some((Self::Colon, 1)),
             _ => None,
         }
     }
@@ -40,6 +42,7 @@ impl Token for Seperator {
             Self::Dot => ".",
             Self::Semicolon => ";",
             Self::Comma => ",",
+            Self::Colon => ":",
         }
     }
 }

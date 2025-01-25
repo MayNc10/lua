@@ -67,6 +67,11 @@ impl<'a> Iterator for Lexer<'a> {
             self.index += len;
             Some(Lexeme::Keyword(kw))
         }
+        // lex immediatly after keywords to prevent other captures
+        else if let Some((ident, len)) = identifier::Identifier::parse(text) {
+            self.index += len;
+            Some(Lexeme::Identifier(ident))
+        }
         else if let Some((s, len)) = literal::StringLiteral::parse(text) {
             self.index += len;
             Some(Lexeme::StringLiteral(s))
@@ -88,10 +93,7 @@ impl<'a> Iterator for Lexer<'a> {
             self.index += len;
             Some(Lexeme::Seperator(sep))
         }
-        else if let Some((ident, len)) = identifier::Identifier::parse(text) {
-            self.index += len;
-            Some(Lexeme::Identifier(ident))
-        }
+        
         else if let Some((wsp, len)) = whitespace::Whitespace::parse(text) {
             self.index += len;
             Some(Lexeme::Whitespace(wsp))
