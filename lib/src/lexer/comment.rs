@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use regex::{self, Regex};
 use super::*;
 
-const RE_STR: &str = r"\A(--\[\[(?<multi>[^\[\]]*)\]\]|-(?<single>.*)$)";
+const RE_STR: &str = r"(?m)\A--(\[\[(?<multi>[^\[\]]*)\]\]|(?<single>.*)$)";
 const MULTILINE_GROUP: &str = "multi";
 const SINGLELINE_GROUP: &str = "single";
 
