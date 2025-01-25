@@ -14,7 +14,7 @@ const fn is_sorted(a: &[&str]) -> bool {
     true
 }
 
-#[derive(VariantsToStr)]
+#[derive(VariantsToStr, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Keyword {
     Function,
     Elseif,
@@ -44,6 +44,10 @@ const_assert!(is_sorted(&Keyword::all_variants_str()));
 impl Token for Keyword {
     fn parse(text: &str) -> Option<(Self, usize)> {
         Keyword::str_to_variant(text)
+            .filter(|&(_kw, size)| 
+                text.chars().skip(size).next()
+                .is_none_or(|c| c.is_whitespace()) 
+            )
     }
     fn raw(&self) -> &str {
         todo!()

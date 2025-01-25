@@ -1,5 +1,9 @@
 // test basic lexing
 
+use crate::lexer::{literal::{NumericLiteral, NumericValue}, operator::Operator, Lexeme};
+
+use super::Lexer;
+
 mod lexemes {
     use crate::lexer::{literal::NumericValue, Lexeme, Lexer, Token};
 
@@ -80,4 +84,18 @@ mod lexemes {
         let wrapped = NumericValue::Integer(val);
         test_numeral_single_output(s, wrapped);
     }
+}
+
+#[test]
+fn add_2() {
+    let s = "5+2";
+    let mut l = Lexer::new(s);
+    let five = l.next().unwrap();
+    let plus = l.next().unwrap();
+    let two = l.next().unwrap();
+
+    assert!(five == Lexeme::NumericLiteral(NumericLiteral::new(NumericValue::Integer(5), "5".to_string())));
+    println!("{:?}", plus);
+    assert!(plus == Lexeme::Operator(Operator::Plus));
+    assert!(two == Lexeme::NumericLiteral(NumericLiteral::new(NumericValue::Integer(2), "2".to_string())));
 }

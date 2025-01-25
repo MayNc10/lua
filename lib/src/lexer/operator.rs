@@ -9,12 +9,14 @@ mod macros {
     macro_rules! capture {
         ($text:ident, $len:expr, $($str:literal, $enum:path),+) => {
             // header
-            match &$text[..$len] {
-                $(
-                    $str => Some(($enum, $len)),
-                )+
-                _ => None
-            }
+            if $text.len() >= $len {
+                match &$text[..$len] {
+                    $(
+                        $str => Some(($enum, $len)),
+                    )+
+                    _ => None
+                }
+            } else { None }
         };
     }
     pub(super) use capture;
@@ -44,6 +46,7 @@ mod macros {
 /// Important: to avoid lookahead, parse this before assignment operations
 /// e.g. '==' here could appear as '=', so if we parse assignment before, we'll always parse '==' as '=' '=' and fail
 // TODO: Rename some of these?
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Operator {
     LogicalOr,
     LogicalAnd,

@@ -1,6 +1,7 @@
 //! This module implements lexer functionality
 //! It takes in a string representing a lua program and outputs a sequence of lexemes, or tokens
 
+pub mod assignment; // ?
 pub mod comment;
 pub mod identifier;
 pub mod keyword;
@@ -24,12 +25,17 @@ trait Token : Sized {
 } 
 
 // Make sure this contains all options!
+#[derive(Clone, PartialEq, Debug)]
 pub enum Lexeme {
     Comment(comment::Comment),
     Keyword(keyword::Keyword),
     StringLiteral(literal::StringLiteral),
-    NumericLiteral(literal::NumericLiteral),
     Operator(operator::Operator),
+    Assignment(assignment::Assignment),
+    NumericLiteral(literal::NumericLiteral),
+    Seperator(seperator::Seperator),
+    Identifier(identifier::Identifier),
+    Whitespace(whitespace::Whitespace),
 }
 
 pub struct Lexer<'a> {
@@ -49,26 +55,48 @@ impl<'a> Iterator for Lexer<'a> {
     
     // Make sure to check for proper ordering!
     fn next(&mut self) -> Option<Lexeme> {
-        if let Some((comment, len)) = comment::Comment::parse(self.text) {
+        if self.index >= self.text.len() { return None; }
+
+        let text = &self.text[self.index..];
+
+        if let Some((comment, len)) = comment::Comment::parse(text) {
             self.index += len;
             Some(Lexeme::Comment(comment))
         }
-        else if let Some((kw, len)) = keyword::Keyword::parse(self.text) {
+        else if let Some((kw, len)) = keyword::Keyword::parse(text) {
             self.index += len;
             Some(Lexeme::Keyword(kw))
         }
-        else if let Some((s, len)) = literal::StringLiteral::parse(self.text) {
+        else if let Some((s, len)) = literal::StringLiteral::parse(text) {
             self.index += len;
             Some(Lexeme::StringLiteral(s))
         }
-        else if let Some((n, len)) = literal::NumericLiteral::parse(self.text) {
-            self.index += len;
-            Some(Lexeme::NumericLiteral(n))
-        }
-        else if let Some((op, len)) = operator::Operator::parse(self.text) {
+        // parse op before numbers in order to not consume +/-
+        else if let Some((op, len)) = operator::Operator::parse(text) {
             self.index += len;
             Some(Lexeme::Operator(op))
         } 
+        else if let Some((a, len)) = assignment::Assignment::parse(text) {
+            self.index += len;
+            Some(Lexeme::Assignment(a))
+        } 
+        else if let Some((n, len)) = literal::NumericLiteral::parse(text) {
+            self.index += len;
+            Some(Lexeme::NumericLiteral(n))
+        }
+        else if let Some((sep, len)) = seperator::Seperator::parse(text) {
+            self.index += len;
+            Some(Lexeme::Seperator(sep))
+        }
+        else if let Some((ident, len)) = identifier::Identifier::parse(text) {
+            self.index += len;
+            Some(Lexeme::Identifier(ident))
+        }
+        else if let Some((wsp, len)) = whitespace::Whitespace::parse(text) {
+            self.index += len;
+            Some(Lexeme::Whitespace(wsp))
+        }
+        
         else {
             None
         }

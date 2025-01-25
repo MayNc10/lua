@@ -10,6 +10,7 @@ lazy_static! {
     static ref RE: Regex = Regex::new(RE_STR).expect("Error parsing comment regex");
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct Comment {
     comment: String,
 }

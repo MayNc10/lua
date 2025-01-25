@@ -5,7 +5,7 @@ use regex::Regex;
 
 use super::Token;
 
-const SHORT_LITERAL_STR_RE_STR: &str = r#"\A('(?<single_str>([^'\n\\]|\\.)*)')|("(?<double_str>([^"\n\\]|\\.)*)")"#;
+const SHORT_LITERAL_STR_RE_STR: &str = r#"\A(('(?<single_str>([^'\n\\]|\\.)*)')|("(?<double_str>([^"\n\\]|\\.)*)"))"#;
 const LONG_STR_BEGIN_RE_STR: &str = r#"\A\[(?<equals>=*)\["#;
 const LONG_STR_FORMAT_RE_STR: &str = r#"\A\[{0}\[\n?(?<str>(.|\s)*?)\]{0}\]"#; // using lazy capture isn't very efficient
 
@@ -22,12 +22,14 @@ lazy_static! {
     static ref HEX_RE: Regex = Regex::new(HEX_RE_STR).expect("Error parsing hex literal regex");
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum StringLiteralKind {
     Short,
     Long,
 }
 
 /// TODO: Figure out escape characters
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StringLiteral {
     kind: StringLiteralKind,
     s: String,
@@ -95,6 +97,7 @@ pub enum NumericValue {
     Float(f64),
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct NumericLiteral {
     value: NumericValue,
     raw: String,
@@ -105,7 +108,7 @@ impl NumericLiteral {
         // attempt to parse decimal
         DECIMAL_RE.captures(s)
             .map(|captures| {
-                if captures.name("fraction").is_some() || captures.name("base").is_some_and(|s| !s.is_empty()) {
+                if captures.name("fraction").is_some_and(|s| s.len() > 1) || captures.name("base").is_some_and(|s| !s.is_empty()) {
                     let value = if captures.name("fraction").is_some() {
                         NumericValue::Float(captures[0].parse().expect("Regex matched decimal float, but parsing failed"))
                     } else {
@@ -163,6 +166,10 @@ impl NumericLiteral {
 
     pub fn value(&self) -> NumericValue {
         self.value
+    }
+
+    pub fn new(value: NumericValue, raw: String) -> NumericLiteral {
+        NumericLiteral { value, raw }
     }
 }
 

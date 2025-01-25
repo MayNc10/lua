@@ -1,3 +1,12 @@
+use clap::Parser;
+use lua::lexer::Lexer;
+
 fn main() {
-    println!("Hello, world!");
+    let cli = cmd::Cli::parse();
+    if let Some(source) = cli.read() {
+        let mut lexer = Lexer::new(&source);
+        for lexeme in lexer {
+            println!("{:?}", lexeme);
+        }
+    }
 }
