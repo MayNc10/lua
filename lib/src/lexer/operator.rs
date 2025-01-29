@@ -50,8 +50,9 @@ mod macros {
 pub enum Operator {
     LogicalOr,
     LogicalAnd,
-    Less,
-    Greater,
+    // These can also parse as seperators, so remove them
+    //Less,
+    //Greater,
     LessEqual,
     GreaterEqual,
     NotEqual,
@@ -92,8 +93,8 @@ impl Token for Operator {
             "//", Operator::DoubleSlash
         }).or_else(|| 
         macros::single_capture!{text,
-            "<", Operator::Less,
-            ">", Operator::Greater,
+            //"<", Operator::Less,
+            //">", Operator::Greater,
             "|", Operator::BitOr,
             "&", Operator::BitAnd,
             "+", Operator::Plus,
@@ -119,8 +120,8 @@ impl Token for Operator {
             Operator::RightShift => ">>",
             Operator::Range => "..",
             Operator::DoubleSlash => "//",
-            Operator::Less => "<",
-            Operator::Greater => ">",
+            //Operator::Less => "<",
+            //Operator::Greater => ">",
             Operator::BitOr => "|",
             Operator::BitAnd => "&",
             Operator::Plus => "+",

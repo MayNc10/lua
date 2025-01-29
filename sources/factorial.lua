@@ -7,5 +7,5 @@ function fact (n)
   end
   
   print("enter a number:")
-  a = io.read("*number")        -- read a number
+  a = io.read("n")        -- read a number
   print(fact(a))

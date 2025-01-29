@@ -24,6 +24,12 @@ trait Token : Sized {
     fn raw(&self) -> &str; 
 } 
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum AngleBrackets {
+    Open,
+    Close,
+}
+
 // Make sure this contains all options!
 #[derive(Clone, PartialEq, Debug)]
 pub enum Lexeme {
@@ -36,8 +42,11 @@ pub enum Lexeme {
     Seperator(seperator::Seperator),
     Identifier(identifier::Identifier),
     Whitespace(whitespace::Whitespace),
+    // Kind of a hack, since < and > can lex as both seperators and operators, and only parsing can tell them apart
+    AngleBrackets(AngleBrackets),
 }
 
+#[derive(Clone, Copy)]
 pub struct Lexer<'a> {
     text: &'a str,
     index: usize, // Change to some form of span?
@@ -93,12 +102,18 @@ impl<'a> Iterator for Lexer<'a> {
             self.index += len;
             Some(Lexeme::Seperator(sep))
         }
-        
         else if let Some((wsp, len)) = whitespace::Whitespace::parse(text) {
             self.index += len;
             Some(Lexeme::Whitespace(wsp))
         }
-        
+        else if &text[self.index..self.index + 1] == "<" {
+            self.index += 1;
+            Some(Lexeme::AngleBrackets(AngleBrackets::Open))
+        }
+        else if &text[self.index..self.index + 1] == ">" {
+            self.index += 1;
+            Some(Lexeme::AngleBrackets(AngleBrackets::Close))
+        }
         else {
             None
         }

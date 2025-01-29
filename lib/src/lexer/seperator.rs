@@ -3,6 +3,7 @@ use super::Token;
 /// TODO: Reuse Operator code
 #[derive(Clone, Debug, PartialEq)]
 pub enum Seperator {
+    DoubleColon,
     OpenBracket,
     CloseBracket,
     OpenParen,
@@ -17,6 +18,9 @@ pub enum Seperator {
 
 impl Token for Seperator {
     fn parse(text: &str) -> Option<(Self, usize)> {
+        if &text[0..2] == "::" { 
+            return Some((Self::DoubleColon, 2));
+        }
         match &text[0..1] {
             "[" => Some((Self::OpenBracket, 1)),
             "]" => Some((Self::CloseBracket, 1)),
@@ -43,6 +47,7 @@ impl Token for Seperator {
             Self::Semicolon => ";",
             Self::Comma => ",",
             Self::Colon => ":",
+            Self::DoubleColon => "::",
         }
     }
 }
