@@ -8,5 +8,6 @@ fn main() {
         for lexeme in lexer {
             println!("{:?}", lexeme);
         }
+        println!("end: {}", &source.as_str()[source.len()-10..]);
     }
 }

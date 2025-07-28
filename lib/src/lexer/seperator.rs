@@ -18,7 +18,7 @@ pub enum Seperator {
 
 impl Token for Seperator {
     fn parse(text: &str) -> Option<(Self, usize)> {
-        if &text[0..2] == "::" { 
+        if text.len() > 1 && &text[0..2] == "::" { 
             return Some((Self::DoubleColon, 2));
         }
         match &text[0..1] {

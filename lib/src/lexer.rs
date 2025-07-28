@@ -106,16 +106,17 @@ impl<'a> Iterator for Lexer<'a> {
             self.index += len;
             Some(Lexeme::Whitespace(wsp))
         }
-        else if &text[self.index..self.index + 1] == "<" {
+        else if &text[..1] == "<" {
             self.index += 1;
             Some(Lexeme::AngleBrackets(AngleBrackets::Open))
         }
-        else if &text[self.index..self.index + 1] == ">" {
+        else if &text[..1] == ">" {
             self.index += 1;
             Some(Lexeme::AngleBrackets(AngleBrackets::Close))
         }
-        else {
+        else {    
             None
         }
+
     }
 }
