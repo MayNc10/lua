@@ -90,6 +90,10 @@ use crate::{ast::*, lexer::Lexer};
 pub fn parse(source: &str) -> Option<Block> {
     // do other things?
     let mut lex = Lexer::new(source);
-    Block::parse(&mut lex)
+    let block = Block::parse(&mut lex);
+    while let Some(lexeme) = lex.next() {
+        println!("remaining lexeme: {:?}", lexeme);
+    }
+    block
 }
 

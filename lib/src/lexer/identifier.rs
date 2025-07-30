@@ -10,7 +10,7 @@ lazy_static! {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Identifier(String);
+pub struct Identifier(pub String);
 
 impl Token for Identifier {
     fn parse(text: &str) -> Option<(Self, usize)> {

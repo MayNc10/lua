@@ -62,7 +62,7 @@ pub enum Operator {
     BitAnd,
     LeftShift,
     RightShift,
-    Range,
+    Concat,
     Plus,
     Minus,
     Star,
@@ -89,7 +89,7 @@ impl Token for Operator {
             "==", Operator::Equal,
             "<<", Operator::LeftShift,
             ">>", Operator::RightShift,
-            "..", Operator::Range,
+            "..", Operator::Concat,
             "//", Operator::DoubleSlash
         }).or_else(|| 
         macros::single_capture!{text,
@@ -118,7 +118,7 @@ impl Token for Operator {
             Operator::Equal => "==",
             Operator::LeftShift => "<<",
             Operator::RightShift => ">>",
-            Operator::Range => "..",
+            Operator::Concat => "..",
             Operator::DoubleSlash => "//",
             //Operator::Less => "<",
             //Operator::Greater => ">",

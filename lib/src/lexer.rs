@@ -70,7 +70,8 @@ impl<'a> Iterator for Lexer<'a> {
 
         if let Some((comment, len)) = comment::Comment::parse(text) {
             self.index += len;
-            Some(Lexeme::Comment(comment))
+            //Some(Lexeme::Comment(comment))
+            self.next()
         }
         else if let Some((kw, len)) = keyword::Keyword::parse(text) {
             self.index += len;
@@ -104,7 +105,10 @@ impl<'a> Iterator for Lexer<'a> {
         }
         else if let Some((wsp, len)) = whitespace::Whitespace::parse(text) {
             self.index += len;
-            Some(Lexeme::Whitespace(wsp))
+            //eprintln!("Whitespace: {wsp:?}, len: {len}");
+            //Some(Lexeme::Whitespace(wsp))
+            //eprintln!("Not emitting whitespace token");
+            self.next()
         }
         else if &text[..1] == "<" {
             self.index += 1;
