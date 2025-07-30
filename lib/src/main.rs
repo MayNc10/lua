@@ -9,5 +9,7 @@ fn main() {
             //println!("{:?}", lexeme);
         }
         let block = parse(&source);
+        println!("\n\n\n\n\n\n");
+        println!("parsed ast: {:?}", block);
     }
 }

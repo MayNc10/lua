@@ -1,8 +1,10 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, fmt::Debug};
 
 use crate::lexer::{self, identifier, literal, operator, seperator, Lexeme, Lexer};
 
-pub trait Expression {}
+pub trait Expression : Debug {}
+
+#[derive(Debug)]
 pub struct Literal {}
 impl Expression for Literal {
 

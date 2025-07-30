@@ -12,6 +12,7 @@ pub mod expression;
 
 // Maybe move these to a submodule?
 
+#[derive(Debug)]
 pub struct Block {
     statements: Vec<Box<dyn statement::Statement>>
 }
