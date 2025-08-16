@@ -1,72 +1,300 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use crate::{ast::{expression::{parse_expression, Expression}, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::Function, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
 
-pub trait Statement : Debug {}
-pub struct EmptyStatement {}
-
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Assignment {
     ident: Identifier,
-    exp: Box<dyn Expression>, // maybe use the enum instead??
+    exp: Expression, // maybe use the enum instead??
 }
-impl Statement for Assignment {
 
+impl Assignment {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        print!("{tabs}Assignment [ ");
+        print!("\t{} = {} ", self.ident, self.exp);
+        println!(" ]");
+    }
 }
+
+impl Display for Assignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Assignment [ ")?;
+        write!(f, "\t{} = {} ", self.ident, self.exp)?;
+        write!(f, "]")
+    }
+}
+
+
 pub struct WhileStatement {}
 pub struct RepeatStatement {}
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Conditional {
-    cases: Vec<(Box<dyn Expression>, Option<Block>)>,
+    cases: Vec<(Expression, Option<Block>)>,
     fallback: Option<Block>,
 }
-impl Statement for Conditional {
 
+impl Conditional {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        println!("{tabs}Conditional: [");
+        for (test, code) in &self.cases {
+            println!("{tabs}\tTest: {test}");
+            println!("{tabs}\tCode: ");
+            if let Some(b) = code {
+                b.print_tree(depth + 2);
+            } else {
+                println!("Nothing");
+            }
+        }
+        println!("{tabs}]");
+    }
 }
+
+impl Display for Conditional {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Conditional: [")?;
+        for (test, code) in &self.cases {
+            writeln!(f, "\tTest: {test}")?;
+            write!(f, "\t\tCode: ")?;
+            if let Some(b) = code {
+                writeln!(f, "{b}")?;
+            } else {
+                writeln!(f, "Nothing")?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+
 pub struct Goto {}
 pub struct Label {}
 pub struct ForStatement {}
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct FunctionCall {
     name: Identifier,
-    args: Vec<Box<dyn Expression>>,
-}
-impl Statement for FunctionCall {
-
+    args: Vec<Expression>,
 }
 
-#[derive(Debug)]
+impl FunctionCall {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        print!("{tabs}FunctionCall [ {}(", self.name);
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                print!("{tabs}{arg}, ");
+            }
+            print!("{tabs}{}", self.args.last().unwrap());
+        } else { print!("{tabs}void"); }
+        println!("{tabs}) ]");
+    }
+}
+
+impl Display for FunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FunctionCall [ {}(", self.name)?;
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                write!(f, "{arg}, ")?;
+            }
+            write!(f, "{}", self.args.last().unwrap())?;
+        } else { write!(f, "void")?; }
+        write!(f, ") ]")
+    }
+}
+
+
+#[derive(Clone)]
 pub struct MethodCall {
     obj_name: Identifier,
     method: Identifier,
-    args: Vec<Box<dyn Expression>>,
-}
-impl Statement for MethodCall {
-
+    args: Vec<Expression>,
 }
 
-#[derive(Debug)]
+impl MethodCall {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        print!("{tabs}MethodCall [ {}.{}(", self.obj_name, self.method);
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                print!("{tabs}{arg}, ");
+            }
+            print!("{tabs}{}", self.args.last().unwrap());
+        } else { print!("{tabs}void"); }
+        println!("{tabs}) ]");
+    }
+}
+
+impl Display for MethodCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MethodCall [ {}.{}(", self.obj_name, self.method)?;
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                write!(f, "{arg}, ")?;
+            }
+            write!(f, "{}", self.args.last().unwrap())?;
+        } else { write!(f, "void")?; }
+        write!(f, ") ]")
+    }
+}
+
+#[derive(Clone)]
 pub struct FunctionDef {
     name: Identifier,
-    args: Vec<Identifier>,
-    code: Option<Block>,
+    func: Function,
 }
-impl Statement for FunctionDef {
 
+impl FunctionDef {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        println!("{tabs}FunctionDef: [");
+        println!("{tabs}\tName: {}", self.name);
+        print!("{tabs}\tArgs: ");
+        if self.func.args.len() > 0 {
+            for arg in &self.func.args[0..(self.func.args.len() - 1)] {
+                print!("{tabs}{arg}, ");
+            }
+            println!("{tabs}{}", self.func.args[self.func.args.len() - 1]);
+        } else {
+            println!("{tabs}(Nothing)");
+        }
+        println!("{tabs}\tCode: ");
+        if let Some(b) = &self.func.code {
+            b.print_tree(depth + 2);
+        } else {
+            println!("{tabs}Nothing");
+        }
+        println!("{tabs}]");
+    }
 }
+
+impl Display for FunctionDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "FunctionDef: [")?;
+        writeln!(f, "\tName: {}", self.name)?;
+        write!(f, "\tArgs: ")?;
+        if self.func.args.len() > 0 {
+            for arg in &self.func.args[0..(self.func.args.len() - 1)] {
+                write!(f, "{arg}, ")?;
+            }
+            writeln!(f, "{}", self.func.args[self.func.args.len() - 1])?;
+        } else {
+            writeln!(f, "(Nothing)")?;
+        }
+        write!(f, "\tCode: ")?;
+        if let Some(b) = &self.func.code {
+            writeln!(f, "{b}")?;
+        } else {
+            writeln!(f, "Nothing")?;
+        }
+        write!(f, "]")
+    }
+}
+
 pub struct Break {} // ?
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Return {
-    val: Option<Box<dyn Expression>>,
+    val: Option<Expression>,
 } // ?
-impl Statement for Return {
 
+impl Return {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        print!("{tabs}Return [ ");
+        if let Some(val) = &self.val {
+            print!("{val}");
+        } else { print!("{tabs}void"); }
+        println!(" ]");
+    }
 }
 
-pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
+impl Display for Return {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Return [ ")?;
+        if let Some(val) = &self.val {
+            write!(f, "{val}")?;
+        } else { write!(f, "void")?; }
+        write!(f, " ]")
+    }
+}
+
+#[derive(Clone)]
+pub enum Statement {
+    Assignment(Assignment),
+    Conditional(Conditional),
+    FunctionDef(FunctionDef),
+    FunctionCall(FunctionCall),
+    MethodCall(MethodCall),
+    Return(Return)
+}
+
+impl Display for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Statement::Assignment(a) => { write!(f, "{}", a) },
+            Statement::Conditional(cond) => { write!(f, "{}", cond) },
+            Statement::FunctionDef(fdef) => { write!(f, "{}", fdef) },
+            Statement::FunctionCall(fcall) => { write!(f, "{}", fcall) },
+            Statement::MethodCall(mcall) => { write!(f, "{}", mcall) },
+            Statement::Return(r) => { write!(f, "{}", r) }
+        }
+    }
+}
+
+impl Statement {
+    pub fn print_tree(&self, depth: usize) {
+        //let tabs = "\t".repeat(depth);
+        match self {
+            Statement::Assignment(a) => { a.print_tree(depth) },
+            Statement::Conditional(cond) => { cond.print_tree(depth) },
+            Statement::FunctionDef(fdef) => { fdef.print_tree(depth) },
+            Statement::FunctionCall(fcall) => { fcall.print_tree(depth) },
+            Statement::MethodCall(mcall) => { mcall.print_tree(depth) },
+            Statement::Return(r) => { r.print_tree(depth) }
+        }
+    }
+
+    pub fn walk(&self, ctx: &mut Ctx) {
+        match self {
+            Statement::Assignment(a) => {
+                // FIXME: WE ARENT HANDLING LOCALS!
+                let val = a.exp.eval(ctx);
+                ctx.new_global(a.ident.clone(), val);
+            },
+            Statement::Conditional(c) => {
+                for (exp, block) in &c.cases {
+                    match exp.eval(ctx) {
+                        Value::Boolean(Boolean::False) | Value::Nil => {},
+                        _ => {
+                            if let Some(block) = block {
+                                block.walk(ctx);
+                            }
+                            return;
+                        }
+                    }
+                }
+                if let Some(block) = &c.fallback {
+                    block.walk(ctx);
+                }
+            },
+            Statement::FunctionDef(fdef) => {
+                
+            },
+            Statement::FunctionCall(fcall) => {
+
+            },
+            Statement::Return(r) => {
+
+            }
+            _ => todo!()
+        }
+    }
+}
+
+pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     //println!("Parse statement");
     // parse assignment
     let mut dup_lex = lex.clone();
@@ -75,7 +303,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
         && let Some(exp) = parse_expression(lex)
     {
         println!("parsed assignment!");
-        return Some(Box::new(Assignment {ident: i, exp}));
+        return Some(Statement::Assignment(Assignment {ident: i, exp}));
     }
     *lex = dup_lex;
     // parse if
@@ -114,7 +342,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
             }
         }
         lex.next(); //end
-        return Some(Box::new(Conditional { cases, fallback }))
+        return Some(Statement::Conditional(Conditional { cases, fallback }))
     }                                                                                                                                                                                                                               
     *lex = dup_lex;
     // parse functioncall
@@ -133,7 +361,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
         }
         lex.next(); 
         println!("Parsed function call, func name {:?}", name);
-        return Some(Box::new(FunctionCall { name, args }));
+        return Some(Statement::FunctionCall(FunctionCall { name, args }));
     }
     *lex = dup_lex;
     // parse method call
@@ -154,7 +382,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
         }
         lex.next(); 
         println!("Parsed method call, obj name {:?}, method name {:?}", obj, method);
-        return Some(Box::new(MethodCall { obj_name: obj, method, args }));
+        return Some(Statement::MethodCall(MethodCall { obj_name: obj, method, args }));
     }
     *lex = dup_lex;
     // parse functiondef                                                                                                        
@@ -172,7 +400,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
         let end_kw = lex.next();
 
         println!("parsed function def!");
-        return Some(Box::new(FunctionDef { name, args, code }));
+        return Some(Statement::FunctionDef(FunctionDef { name, args, code }));
     }
     *lex = dup_lex;
 
@@ -181,7 +409,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Box<dyn Statement>> {
 
         let val = parse_expression(lex);
         println!("parsed return!");
-        return Some(Box::new(Return { val }));
+        return Some(Statement::Return(Return { val }));
     }
     *lex = dup_lex;
     //eprintln!("{:?}", lex.clone().peekable().peek());

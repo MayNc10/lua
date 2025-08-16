@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -9,8 +11,14 @@ lazy_static! {
     static ref IDENTIFIER_RE: Regex = Regex::new(IDENTIFIER_RE_STR).expect("Identifier regex failed to parse");
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct Identifier(pub String);
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (identifier)", self.0)
+    }
+}
 
 impl Token for Identifier {
     fn parse(text: &str) -> Option<(Self, usize)> {

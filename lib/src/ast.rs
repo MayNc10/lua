@@ -1,20 +1,22 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
-use crate::lexer::Lexer;
+use crate::{ast::context::Ctx, lexer::{identifier::Identifier, Lexer}, value::Value};
 
 /// I'm making this a trait for right now, obviously when we want to speed it up it can be made an enum
 pub trait AstNode : Display {
     fn walk(); // does nothing bc we don't have an intepreter
 }
 
+pub mod context;
+pub mod function;
 pub mod statement;
 pub mod expression;
 
 // Maybe move these to a submodule?
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Block {
-    statements: Vec<Box<dyn statement::Statement>>
+    statements: Vec<statement::Statement>
 }
 
 impl Block {
@@ -22,11 +24,11 @@ impl Block {
         Block { statements: Vec::new() }
     }
 
-    fn initial(base: Box<dyn statement::Statement>) -> Block {
+    fn initial(base: statement::Statement) -> Block {
         Block { statements: vec![base] }
     }
 
-    pub fn push_statement(&mut self, st: Box<dyn statement::Statement>) {
+    pub fn push_statement(&mut self, st: statement::Statement) {
         self.statements.push(st);
     }
 
@@ -41,5 +43,29 @@ impl Block {
         }
         else { None }
     } 
+
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        println!("{tabs}Block: [");
+        for st in &self.statements {
+            st.print_tree(depth + 1);
+        }
+        println!("{tabs}]");
+    }
+
+    pub fn walk(&self, ctx: &mut Ctx) {
+        for st in &self.statements {
+            st.walk(ctx);
+        }
+    }
 }
 
+impl Display for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Block: [")?;
+        for st in &self.statements {
+            writeln!(f, "\t{};", st)?;
+        }
+        writeln!(f, "]")
+    }
+}

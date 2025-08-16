@@ -1,5 +1,5 @@
 use clap::Parser;
-use lua::{lexer::Lexer, parser::parse};
+use lua::{ast::context::Ctx, lexer::Lexer, parser::parse};
 
 fn main() {
     let cli = cmd::Cli::parse();
@@ -8,8 +8,12 @@ fn main() {
         for lexeme in lexer {
             //println!("{:?}", lexeme);
         }
-        let block = parse(&source);
+        let block = parse(&source).unwrap();
         println!("\n\n\n\n\n\n");
-        println!("parsed ast: {:?}", block);
+        println!("parsed ast:");
+        block.print_tree(0);
+
+        let mut context = Ctx::new();
+        block.walk(&mut context);
     }
 }

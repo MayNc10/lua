@@ -1,30 +1,20 @@
-use std::{cmp::Ordering, fmt::Debug};
+use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}};
 
-use crate::lexer::{self, identifier, literal, operator, seperator, Lexeme, Lexer};
+use crate::{ast::context::Ctx, lexer::{self, identifier::{self, Identifier}, literal, operator, seperator, Lexeme, Lexer}, value::Value};
 
-pub trait Expression : Debug {}
-
-#[derive(Debug)]
-pub struct Literal {}
-impl Expression for Literal {
-
-}
 pub struct TableExpression {}
 
 #[derive(Clone, Debug)]
 pub struct BinaryExpression {
     op: ExpOperation,
-    lhs: Box<ExpOperand>,
-    rhs: Box<ExpOperand>
-}
-impl Expression for BinaryExpression {
-
+    lhs: Box<Expression>,
+    rhs: Box<Expression>
 }
 
 #[derive(Clone, Debug)]
 pub struct UnaryExpression {
     op: ExpOperation,
-    arg: Box<ExpOperand>
+    arg: Box<Expression>
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -70,7 +60,7 @@ impl ExpOperation {
 }
 
 #[derive(Clone, Debug)]
-enum ExpOperand {
+pub enum Expression {
     NumericLiteral(literal::NumericLiteral),
     StringLiteral(literal::StringLiteral),
     Identifier(identifier::Identifier),
@@ -78,12 +68,49 @@ enum ExpOperand {
     MethodCall(identifier::Identifier, identifier::Identifier),
     BinaryExp(BinaryExpression),
     UnaryExp(UnaryExpression)
+    // TODO: TABLES!
 }
 
-// rework eventually
-impl Expression for ExpOperand {}
+impl Expression {
+    pub fn eval(&self, ctx: &mut Ctx) -> Value {
+        match self {
+            Expression::NumericLiteral(nlit) => {
+                // FIXME
+                match nlit.value() {
+                    literal::NumericValue::Float(f) => Value::Number(f),
+                    literal::NumericValue::Integer(i) => Value::Number(i as f64),
+                }
+            },
+            Expression::StringLiteral(slit) => {
+                Value::String(slit.value().to_string())
+            },
+            Expression::Identifier(ident) => {
+                ctx.get_var(ident).unwrap_or(Value::Nil)
+            },
+            Expression::FuncCall(fname) => {
+                match ctx.get_var(fname) {
+                    Some(Value::Function(fcode)) => {
+                        ctx.enter_block();
+                        
+                        fcode.walk(ctx);
+                        ctx.leave_block().unwrap_or(Value::Nil)
+                    },
+                    // FIXME
+                    _ => { panic!("function not defined, handle this error gracefully!") }
+                }
+            }            
+            _ => todo!()
+        }
+    }
+}
 
-pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
+impl Display for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
     // UGHHH I HATE SHUTNING YARD
     let mut operands = Vec::new();
     let mut operations = Vec::new();
@@ -230,7 +257,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
                    
                     opened_parens -= 1;
                     lex.next();
-                    operands.push(ExpOperand::FuncCall(ident.clone()));
+                    operands.push(Expression::FuncCall(ident.clone()));
                 }
                 else if let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.clone().peekable().peek()
                 {
@@ -249,27 +276,27 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
                                 }
                             }
                             lex.next(); 
-                            operands.push(ExpOperand::MethodCall(ident.clone(), method));
+                            operands.push(Expression::MethodCall(ident.clone(), method));
                             println!("parsed method as expression");   
                         }
                         _ => panic!("???")
                     }
                 }
                 else {
-                    operands.push(ExpOperand::Identifier(ident.clone()));
+                    operands.push(Expression::Identifier(ident.clone()));
                 }
             },
             Lexeme::NumericLiteral(nlit) => {
                 lex.next();
                 assert!(!last_was_arg);
                 last_was_arg = true;
-                operands.push(ExpOperand::NumericLiteral(nlit.clone()));
+                operands.push(Expression::NumericLiteral(nlit.clone()));
             },
             Lexeme::StringLiteral(slit) => {
                 lex.next();
                 assert!(!last_was_arg);
                 last_was_arg = true;
-                operands.push(ExpOperand::StringLiteral(slit.clone()));
+                operands.push(Expression::StringLiteral(slit.clone()));
             },
             _ => break
         }
@@ -288,7 +315,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
                     if previous != ExpOperation::OpenParen {
                         let rhs = Box::new(operands.pop().unwrap());
                         let lhs = Box::new(operands.pop().unwrap());
-                        let new_operand = ExpOperand::BinaryExp(
+                        let new_operand = Expression::BinaryExp(
                             BinaryExpression { op: previous, lhs, rhs }  
                         );
                         operands.push(new_operand);
@@ -302,7 +329,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
                         // TODO: MERGE PATHS
                         let rhs = Box::new(operands.pop().unwrap());
                         let lhs = Box::new(operands.pop().unwrap());
-                        let new_operand = ExpOperand::BinaryExp(
+                        let new_operand = Expression::BinaryExp(
                             BinaryExpression { op: previous, lhs, rhs }  
                         );
                         operands.push(new_operand);
@@ -313,7 +340,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
             } else if *operations.last().unwrap() ==  ExpOperation::UnaryMinus {
                 operations.pop();
                 let arg = Box::new(operands.pop().unwrap());
-                let new_arg = ExpOperand::UnaryExp(
+                let new_arg = Expression::UnaryExp(
                     UnaryExpression { op: ExpOperation::UnaryMinus, arg }
                 );
                 operands.push(new_arg);
@@ -326,7 +353,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
         if op == ExpOperation::UnaryMinus {
             // duplicate code
             let arg = Box::new(operands.pop().unwrap());
-            let new_arg = ExpOperand::UnaryExp(
+            let new_arg = Expression::UnaryExp(
                 UnaryExpression { op: ExpOperation::UnaryMinus, arg }
             );
             operands.push(new_arg);
@@ -335,7 +362,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
             // also code dup
             let rhs = Box::new(operands.pop().unwrap());
             let lhs = Box::new(operands.pop().unwrap());
-            let new_operand = ExpOperand::BinaryExp(
+            let new_operand = Expression::BinaryExp(
                 BinaryExpression { op: op, lhs, rhs }  
             );
             operands.push(new_operand);
@@ -345,5 +372,5 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Box<dyn Expression>> {
     //println!("Operands: {:?}", operands);
     //println!("Operations: {:?}", operations);
 
-    operands.pop().map(|exp| Box::new(exp) as Box<dyn Expression>)
+    operands.pop()
 }
