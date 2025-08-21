@@ -1,6 +1,6 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}};
+use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}, io};
 
-use crate::{ast::context::Ctx, lexer::{self, identifier::{self, Identifier}, literal, operator, seperator, Lexeme, Lexer}, value::Value};
+use crate::{ast::{context::Ctx, function::FunctionCall}, lexer::{self, identifier::{self, Identifier}, literal, operator, seperator, Lexeme, Lexer}, value::Value};
 
 pub struct TableExpression {}
 
@@ -64,7 +64,7 @@ pub enum Expression {
     NumericLiteral(literal::NumericLiteral),
     StringLiteral(literal::StringLiteral),
     Identifier(identifier::Identifier),
-    FuncCall(identifier::Identifier),
+    FuncCall(FunctionCall),
     MethodCall(identifier::Identifier, identifier::Identifier),
     BinaryExp(BinaryExpression),
     UnaryExp(UnaryExpression)
@@ -87,19 +87,33 @@ impl Expression {
             Expression::Identifier(ident) => {
                 ctx.get_var(ident).unwrap_or(Value::Nil)
             },
-            Expression::FuncCall(fname) => {
-                match ctx.get_var(fname) {
-                    Some(Value::Function(fcode)) => {
-                        ctx.enter_block();
-                        
-                        fcode.walk(ctx);
-                        ctx.leave_block().unwrap_or(Value::Nil)
-                    },
-                    // FIXME
-                    _ => { panic!("function not defined, handle this error gracefully!") }
+            Expression::FuncCall(fcall) => {
+                fcall.call(ctx)
+            },
+            Expression::MethodCall(obj, func) => {
+                // FIXME!
+                if obj.0 == "io" && func.0 == "read" {
+                    let mut buf = String::new();
+                    let stdin = io::stdin();
+                    stdin.read_line(&mut buf).unwrap();
+                    Value::String(buf)         
                 }
-            }            
-            _ => todo!()
+
+                else {
+                    panic!("Method stuff is hacked together rn!");
+                }
+            },
+            Expression::BinaryExp(b) => {
+                match b.op {
+                    ExpOperation::Equals => {
+                        let lhs_val = b.lhs.eval(ctx);
+                        let rhs_val = b.rhs.eval(ctx);
+                        Value::Boolean((lhs_val == rhs_val).into())
+                    },
+                    _ => todo!()
+                }
+            }     
+            _ => panic!("Expression kind {:?} not yet implemented!", self)
         }
     }
 }
@@ -247,9 +261,10 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     println!("resolving function call");
                     opened_parens += 1;
                     lex.next();
+                    let mut exps = Vec::new();
                     // parse expressions
                     while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-                        let _ = parse_expression(lex);
+                        exps.push(parse_expression(lex).unwrap());
                         if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
                             lex.next();
                         }
@@ -257,7 +272,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                    
                     opened_parens -= 1;
                     lex.next();
-                    operands.push(Expression::FuncCall(ident.clone()));
+                    operands.push(Expression::FuncCall(FunctionCall::new(ident.clone(), exps)));
                 }
                 else if let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.clone().peekable().peek()
                 {

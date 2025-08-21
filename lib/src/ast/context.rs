@@ -30,6 +30,10 @@ impl Ctx {
         self.globals.insert(ident, val);
     }
 
+    pub fn new_local(&mut self, ident: Identifier, val: Value) {
+        self.locals.entry(ident).or_insert(Vec::new()).push((val, self.level));
+    }
+
     pub fn enter_block(&mut self) {
         self.level += 1;
     }

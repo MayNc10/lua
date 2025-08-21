@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::Function, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall}, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
@@ -71,40 +71,6 @@ impl Display for Conditional {
 pub struct Goto {}
 pub struct Label {}
 pub struct ForStatement {}
-
-#[derive(Clone)]
-pub struct FunctionCall {
-    name: Identifier,
-    args: Vec<Expression>,
-}
-
-impl FunctionCall {
-    pub fn print_tree(&self, depth: usize) {
-        let tabs = "\t".repeat(depth);
-        print!("{tabs}FunctionCall [ {}(", self.name);
-        if self.args.len() > 0 {
-            for arg in &self.args[0..self.args.len() - 1] {
-                print!("{tabs}{arg}, ");
-            }
-            print!("{tabs}{}", self.args.last().unwrap());
-        } else { print!("{tabs}void"); }
-        println!("{tabs}) ]");
-    }
-}
-
-impl Display for FunctionCall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FunctionCall [ {}(", self.name)?;
-        if self.args.len() > 0 {
-            for arg in &self.args[0..self.args.len() - 1] {
-                write!(f, "{arg}, ")?;
-            }
-            write!(f, "{}", self.args.last().unwrap())?;
-        } else { write!(f, "void")?; }
-        write!(f, ") ]")
-    }
-}
-
 
 #[derive(Clone)]
 pub struct MethodCall {
@@ -281,13 +247,14 @@ impl Statement {
                 }
             },
             Statement::FunctionDef(fdef) => {
-                
+                // FIXME: THIS TREATS ALL FUNCTIONS AS GLOBALS
+                ctx.new_global(fdef.name.clone(), Value::Function(fdef.func.clone()));
             },
             Statement::FunctionCall(fcall) => {
-
+                fcall.call(ctx);
             },
             Statement::Return(r) => {
-
+                todo!()
             }
             _ => todo!()
         }
@@ -361,7 +328,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         }
         lex.next(); 
         println!("Parsed function call, func name {:?}", name);
-        return Some(Statement::FunctionCall(FunctionCall { name, args }));
+        return Some(Statement::FunctionCall(FunctionCall::new(name, args)));
     }
     *lex = dup_lex;
     // parse method call
@@ -400,7 +367,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         let end_kw = lex.next();
 
         println!("parsed function def!");
-        return Some(Statement::FunctionDef(FunctionDef { name, args, code }));
+        return Some(Statement::FunctionDef(FunctionDef { name, func: Function { args, code } }));
     }
     *lex = dup_lex;
 
