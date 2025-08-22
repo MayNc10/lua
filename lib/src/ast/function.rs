@@ -19,6 +19,14 @@ impl FunctionCall {
         FunctionCall { name, args }
     }
 
+    pub fn name(&self) -> &Identifier {
+        &self.name
+    }
+
+    pub fn args(&self) -> &Vec<Expression> {
+        &self.args
+    }
+
     pub fn print_tree(&self, depth: usize) {
         let tabs = "\t".repeat(depth);
         print!("{tabs}FunctionCall [ {}(", self.name);
@@ -32,12 +40,12 @@ impl FunctionCall {
     }
 
     pub fn call(&self, ctx: &mut Ctx) -> Value {
-        println!("Calling functioned named {}", self.name.0);
         // FIXME: REGISTER AS A GLOBAL FUNCTION
         if self.name.0 == "print" {
             for val in self.args.iter().map(|e| e.eval(ctx)) {
                 match val {
                     Value::String(s) => print!("{s}"),
+                    Value::Number(n) => print!("{n}"),
                     _ => todo!()
                 }
                 print!("\t")

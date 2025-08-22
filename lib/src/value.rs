@@ -27,25 +27,27 @@ impl Value {
             Value::Table => "Table",
         }
     }
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Value::Number(n) => Some(*n),
+            Value::String(s) => s.trim().parse().ok(),
+            _ => None
+        }
+    }
 }
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Value::Nil => { matches!(other, Value::Nil) },
-            Value::Boolean(b) => { 
-                match other {
-                    Value::Boolean(b_other) => { b == b_other }
-                    _ => false,
-                }
-            },
-            Value::Number(n) => {
-                match other {
-                    Value::Number(n_other) => { n == n_other }
-                    _ => false,
-                }
-            }
-            _ => panic!("Equality check not implemented for value {}", self.val_str())
+        match (self, other) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::Boolean(b1), Value::Boolean(b2)) => b1 == b2,
+            (Value::Number(n1), Value::Number(n2)) => n1 == n2,
+            (Value::String(s1), Value::String(s2)) => s1 == s2,
+            (Value::Userdata, Value::Userdata) => todo!(),
+            (Value::Function(f1), Value::Function(f2)) => todo!(),
+            (Value::Thread, Value::Thread) => todo!(),
+            (Value::Table, Value::Table) => todo!(),
+            _ => false,
         }
     }
 }

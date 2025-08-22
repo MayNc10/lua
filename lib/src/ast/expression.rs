@@ -43,6 +43,7 @@ impl ExpOperation {
     pub fn precedence(first: ExpOperation, second: ExpOperation) -> Ordering {
         first.rank().cmp(&second.rank())
     }
+
     fn rank(&self) -> u8 {
         match self {
             ExpOperation::And | ExpOperation::Or => 0,
@@ -57,6 +58,11 @@ impl ExpOperation {
             ExpOperation::OpenParen | ExpOperation::CloseParen => 7,
         }
     }
+
+    pub fn is_arith_op(&self) -> bool {
+        matches!(self, ExpOperation::Plus | ExpOperation::Minus | ExpOperation::Star | ExpOperation::Slash 
+            | ExpOperation::Exp | ExpOperation::UnaryMinus)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -65,7 +71,7 @@ pub enum Expression {
     StringLiteral(literal::StringLiteral),
     Identifier(identifier::Identifier),
     FuncCall(FunctionCall),
-    MethodCall(identifier::Identifier, identifier::Identifier),
+    MethodCall(identifier::Identifier, FunctionCall),
     BinaryExp(BinaryExpression),
     UnaryExp(UnaryExpression)
     // TODO: TABLES!
@@ -92,11 +98,20 @@ impl Expression {
             },
             Expression::MethodCall(obj, func) => {
                 // FIXME!
-                if obj.0 == "io" && func.0 == "read" {
+                if obj.0 == "io" && func.name().0 == "read" {
                     let mut buf = String::new();
                     let stdin = io::stdin();
                     stdin.read_line(&mut buf).unwrap();
-                    Value::String(buf)         
+
+                    // check args
+                    if let Some(a) = func.args().first() 
+                    && let Value::String(s) = a.eval(ctx) 
+                    && &s.as_str()[0..1] == "n" 
+                    {
+                        Value::Number(buf.trim().parse().unwrap())
+                    } else {
+                        Value::String(buf)   
+                    }    
                 }
 
                 else {
@@ -104,13 +119,26 @@ impl Expression {
                 }
             },
             Expression::BinaryExp(b) => {
-                match b.op {
-                    ExpOperation::Equals => {
-                        let lhs_val = b.lhs.eval(ctx);
-                        let rhs_val = b.rhs.eval(ctx);
-                        Value::Boolean((lhs_val == rhs_val).into())
-                    },
-                    _ => todo!()
+                if b.op.is_arith_op() {
+                    let lhs_val = b.lhs.eval(ctx).as_number().expect("BinOp lhs wasnt number");
+                    let rhs_val = b.rhs.eval(ctx).as_number().expect("BinOp rhs wasnt number");
+                    Value::Number(match b.op {
+                        ExpOperation::Plus =>lhs_val + rhs_val, 
+                        ExpOperation::Minus => lhs_val - rhs_val,
+                        ExpOperation::Star => lhs_val * rhs_val,
+                        ExpOperation::Slash => lhs_val / rhs_val,
+                        ExpOperation::Exp => lhs_val.powf(rhs_val),
+                        _ => unreachable!()
+                    })
+                } else {
+                    match b.op {
+                        ExpOperation::Equals => {
+                            let lhs_val = b.lhs.eval(ctx);
+                            let rhs_val = b.rhs.eval(ctx);
+                            Value::Boolean((lhs_val == rhs_val).into())
+                        },
+                        _ => todo!()
+                    }
                 }
             }     
             _ => panic!("Expression kind {:?} not yet implemented!", self)
@@ -283,15 +311,16 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                             lex.next(); // should be oparen
                             opened_parens += 1;
                             // parse args
-                            // THIS IS DUPLICATED CODE FROM EXPRESSION IDENT PARSING
+                            // THIS IS DUPLICATED CODE FROM EXPRESSION Function PARSING
+                            let mut exps = Vec::new();
                             while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-                                let _ = parse_expression(lex);
+                                exps.push(parse_expression(lex).unwrap());
                                 if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
                                     lex.next();
                                 }
                             }
                             lex.next(); 
-                            operands.push(Expression::MethodCall(ident.clone(), method));
+                            operands.push(Expression::MethodCall(ident.clone(), FunctionCall::new(method.clone(), exps)));
                             println!("parsed method as expression");   
                         }
                         _ => panic!("???")

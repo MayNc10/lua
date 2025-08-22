@@ -55,4 +55,8 @@ impl Ctx {
         }
         self.ret_val.take()
     }
+
+    pub fn ret(&mut self, v: Option<Value>) {
+        self.ret_val = v;
+    }
 }

@@ -254,7 +254,8 @@ impl Statement {
                 fcall.call(ctx);
             },
             Statement::Return(r) => {
-                todo!()
+                let rv = r.val.as_ref().map(|exp| exp.eval(ctx));
+                ctx.ret(rv);
             }
             _ => todo!()
         }
