@@ -48,6 +48,10 @@ impl Conditional {
                 println!("Nothing");
             }
         }
+        if let Some(fb) = &self.fallback {
+            println!("{tabs}\tFallback: ");
+            fb.print_tree(depth + 2);
+        }
         println!("{tabs}]");
     }
 }

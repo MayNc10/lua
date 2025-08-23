@@ -153,7 +153,7 @@ impl Display for Expression {
 }
 
 pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
-    // UGHHH I HATE SHUTNING YARD
+    // UGHHH I HATE SHUnTING YARD
     let mut operands = Vec::new();
     let mut operations = Vec::new();
 
@@ -264,7 +264,6 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                         
                         opened_parens -= 1;
                         if opened_parens < 0 {
-                            eprintln!("might have miscounted parens!");
                             break;
                         }
                         lex.next();
@@ -282,53 +281,27 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                 if last_was_arg {
                     break;
                 }
+                let mut dup_lex = lex.clone();
                 lex.next();
                 last_was_arg = true;
-                if let Some(Lexeme::Seperator(seperator::Seperator::OpenParen)) = lex.clone().peekable().peek() {
-                    // assert that its a correct function call
-                    println!("resolving function call");
-                    opened_parens += 1;
-                    lex.next();
-                    let mut exps = Vec::new();
-                    // parse expressions
-                    while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-                        exps.push(parse_expression(lex).unwrap());
-                        if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
-                            lex.next();
-                        }
-                    }
-                   
-                    opened_parens -= 1;
-                    lex.next();
-                    operands.push(Expression::FuncCall(FunctionCall::new(ident.clone(), exps)));
-                }
-                else if let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.clone().peekable().peek()
-                {
-                    // terrible way to peek!!!
-                    lex.next();
-                    match lex.next() {
-                        Some(Lexeme::Identifier(method)) => {
-                            lex.next(); // should be oparen
-                            opened_parens += 1;
-                            // parse args
-                            // THIS IS DUPLICATED CODE FROM EXPRESSION Function PARSING
-                            let mut exps = Vec::new();
-                            while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-                                exps.push(parse_expression(lex).unwrap());
-                                if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
-                                    lex.next();
-                                }
-                            }
-                            lex.next(); 
-                            operands.push(Expression::MethodCall(ident.clone(), FunctionCall::new(method.clone(), exps)));
-                            println!("parsed method as expression");   
-                        }
-                        _ => panic!("???")
-                    }
+                if let Some(funccall) = FunctionCall::parse(&mut dup_lex) {
+                    operands.push(Expression::FuncCall(funccall));
+                    *lex = dup_lex
                 }
                 else {
-                    operands.push(Expression::Identifier(ident.clone()));
-                }
+                    if let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.clone().peekable().peek()
+                    {
+                        // terrible way to peek!!!
+                        lex.next();
+                        if let Some(funccall) = FunctionCall::parse(lex) {
+                            operands.push(Expression::MethodCall(ident.clone(), funccall));
+                        }
+                        else { panic!("Parsed ident and dot, failed parsing method") }
+                    }
+                    else {
+                        operands.push(Expression::Identifier(ident.clone()));
+                    }
+                }        
             },
             Lexeme::NumericLiteral(nlit) => {
                 lex.next();
