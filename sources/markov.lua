@@ -25,10 +25,10 @@ end
 local statetab
 
 function insert (index, value)
-if not statetab[index] then
-    statetab[index] = {n=0}
-end
-    table.insert(statetab[index], value)
+    if not statetab[index] then
+        statetab[index] = {n=0}
+    end
+        table.insert(statetab[index], value)
 end
 
 local N  = 2

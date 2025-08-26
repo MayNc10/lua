@@ -73,6 +73,11 @@ impl<'a> Iterator for Lexer<'a> {
             //Some(Lexeme::Comment(comment))
             self.next()
         }
+        // parse op before numbers in order to not consume +/-
+        else if let Some((op, len)) = operator::Operator::parse(text) {
+            self.index += len;
+            Some(Lexeme::Operator(op))
+        }
         else if let Some((kw, len)) = keyword::Keyword::parse(text) {
             self.index += len;
             Some(Lexeme::Keyword(kw))
@@ -85,11 +90,6 @@ impl<'a> Iterator for Lexer<'a> {
         else if let Some((s, len)) = literal::StringLiteral::parse(text) {
             self.index += len;
             Some(Lexeme::StringLiteral(s))
-        }
-        // parse op before numbers in order to not consume +/-
-        else if let Some((op, len)) = operator::Operator::parse(text) {
-            self.index += len;
-            Some(Lexeme::Operator(op))
         } 
         else if let Some((a, len)) = assignment::Assignment::parse(text) {
             self.index += len;

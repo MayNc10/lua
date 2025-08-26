@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use crate::{ast::context::Ctx, lexer::{identifier::Identifier, Lexer}, value::Value};
+use crate::{ast::context::Ctx, lexer::{identifier::Identifier, keyword::Keyword, seperator, Lexeme, Lexer}, value::Value};
 
 /// I'm making this a trait for right now, obviously when we want to speed it up it can be made an enum
 pub trait AstNode : Display {
@@ -68,4 +68,24 @@ impl Display for Block {
         }
         writeln!(f, "]")
     }
+}
+
+pub fn parse_comma_list<T, F: Fn(&mut Lexer) -> Option<T>, P: Fn(&Lexeme) -> bool>
+    (lex: &mut Lexer, parse_func: F, predicate: P) -> Option<Vec<T>> 
+{
+    let mut items = Vec::new();
+    // parse items
+    while let Some(lexeme) = lex.clone().peekable().peek() && !predicate(lexeme) {
+        items.push(parse_func(lex)?);
+        if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
+            lex.next();
+        }
+    }
+
+    assert!(predicate(&lex.next().unwrap()));
+    Some(items)
+}
+
+pub fn parse_paren_list<T, F: Fn(&mut Lexer) -> Option<T>>(lex: &mut Lexer, parse_func: F) -> Option<Vec<T>> {
+    parse_comma_list(lex, parse_func, |lexeme| lexeme == &Lexeme::Seperator(seperator::Seperator::CloseParen))
 }

@@ -1,11 +1,12 @@
 use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall}, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
     ident: Identifier,
     exp: Expression, // maybe use the enum instead??
+    local: bool
 }
 
 impl Assignment {
@@ -167,27 +168,27 @@ pub struct Break {} // ?
 
 #[derive(Clone)]
 pub struct Return {
-    val: Option<Expression>,
+    vals: Vec<Expression>,
 } // ?
 
 impl Return {
     pub fn print_tree(&self, depth: usize) {
         let tabs = "\t".repeat(depth);
         print!("{tabs}Return [ ");
-        if let Some(val) = &self.val {
-            print!("{val}");
-        } else { print!("{tabs}void"); }
-        println!(" ]");
+        for val in &self.vals {
+            print!("{val} ");
+        }
+        println!("]");
     }
 }
 
 impl Display for Return {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Return [ ")?;
-        if let Some(val) = &self.val {
-            write!(f, "{val}")?;
-        } else { write!(f, "void")?; }
-        write!(f, " ]")
+        for val in &self.vals {
+            write!(f, "{val} ")?;
+        }
+        writeln!(f, "]")
     }
 }
 
@@ -258,7 +259,8 @@ impl Statement {
                 fcall.call(ctx);
             },
             Statement::Return(r) => {
-                let rv = r.val.as_ref().map(|exp| exp.eval(ctx));
+                // FIXME
+                let rv = r.vals.first().as_ref().map(|exp| exp.eval(ctx));
                 ctx.ret(rv);
             }
             _ => todo!()
@@ -269,13 +271,34 @@ impl Statement {
 pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     //println!("Parse statement");
     // parse assignment
-    let mut dup_lex = lex.clone();
+    let dup_lex = lex.clone();
+
+    if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Local)) = lex.next() {
+        if let Some(Statement::Assignment(mut assign)) = parse_statement(lex) {
+            assign.local = true;
+            return Some(Statement::Assignment(assign));
+        } else { panic!("Local without following assignment") }
+    }
+
+    *lex = dup_lex;
     if let Some(Lexeme::Identifier(i)) = lex.next() 
-        && let Some(Lexeme::Assignment(assign)) = lex.next()
-        && let Some(exp) = parse_expression(lex)
     {
-        println!("parsed assignment!");
-        return Some(Statement::Assignment(Assignment {ident: i, exp}));
+        // try to parse more idents
+        let mut idents = Vec::new();
+        let mut failed = false;
+        while let Some(lx) = lex.next() && !matches!(lx, Lexeme::Assignment(_)) {
+            if !matches!(lx, Lexeme::Seperator(seperator::Seperator::Comma)) {
+                failed = true;
+                break;
+            }
+            if let Some(Lexeme::Identifier(ident)) = lex.next() {
+                idents.push(ident);
+            } else { failed = true; break; }
+        }
+        if !failed { 
+//println!("parsed assignment!");
+        return Some(Statement::Assignment(Assignment {ident: i, exp, local: false}));
+        }
     }
     *lex = dup_lex;
     // parse if
@@ -283,11 +306,13 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         let mut cases = Vec::new();
         let mut fallback = None;
         let test = parse_expression(lex).unwrap();
-        println!("parsed if test");
+        //println!("parsed if test");
         let then_kw = lex.next();
         let code = Block::parse(lex);
         cases.push((test, code));
         eprintln!("parsed main if block");
+        // FIXME: shitty stupid hack
+        let mut hit_end = false;
         loop {
             match lex.next() {
                 Some(Lexeme::Keyword(lexer::keyword::Keyword::Elseif)) => {
@@ -297,23 +322,24 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
                     cases.push((new_test, new_code));
                 },
                 Some(Lexeme::Keyword(lexer::keyword::Keyword::Else)) => {
-                    eprintln!("parsing else");
+                    //eprintln!("parsing else");
                     let new_code = Block::parse(lex);
                     fallback = new_code;
-                    eprintln!("parsed else");
+                    //eprintln!("parsed else");
                     break
                 },
 
                 Some(Lexeme::Keyword(lexer::keyword::Keyword::End)) => {
-                    println!("reached end kw!");
+                    eprintln!("reached end kw!");
+                    hit_end = true;
                     break
                 },
                 other => {
-                    panic!("syntax error parsing if statement, next was {:?}", other);
+                    panic!("syntax error parsing if statement, then kw was {:?}, next was {:?}", then_kw, other);
                 }
             }
         }
-        lex.next(); //end
+        if !hit_end { lex.next();  }
         return Some(Statement::Conditional(Conditional { cases, fallback }))
     }                                                                                                                                                                                                                               
     *lex = dup_lex;
@@ -332,7 +358,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
             }
         }
         lex.next(); 
-        println!("Parsed function call, func name {:?}", name);
+        //println!("Parsed function call, func name {:?}", name);
         return Some(Statement::FunctionCall(FunctionCall::new(name, args)));
     }
     *lex = dup_lex;
@@ -362,26 +388,41 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         && let Some(Lexeme::Identifier(name)) = lex.next()
     {
         let oparen = lex.next();
-        // just one for now lol
-        let mut args = Vec::new();
-        if let Some(Lexeme::Identifier(argname)) = lex.next() {
-            args.push(argname); 
-        }                                                                                                                                                                                                                                                                  
-        let cparen: Option<Lexeme> = lex.next();
+        
+        let args = parse_paren_list(lex, |l| 
+            if let Some(Lexeme::Identifier(ident)) = l.next() {
+                Some(ident)
+            } else { None }
+        ).unwrap(); 
+        eprintln!("Successfully parsed args!");                                                                                                                                                                                                                                                       
         let code = Block::parse(lex);
+        eprintln!("Sucessfully parsed code!");
         let end_kw = lex.next();
+        let fdef = Statement::FunctionDef(FunctionDef { name, func: Function { args, code } });
+        fdef.print_tree(0);
+        assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
 
-        println!("parsed function def!");
-        return Some(Statement::FunctionDef(FunctionDef { name, func: Function { args, code } }));
+        
+
+
+        //println!("parsed function def!");
+        return Some(fdef);
     }
     *lex = dup_lex;
 
     // parse return
     if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Return)) = lex.next() {
 
-        let val = parse_expression(lex);
-        println!("parsed return!");
-        return Some(Statement::Return(Return { val }));
+        let mut vals = Vec::new();
+        if let Some(exp) = parse_expression(lex) {
+            vals.push(exp);
+            while lex.clone().next() == Some(Lexeme::Seperator(seperator::Seperator::Comma)) {
+                lex.next();
+                vals.push(parse_expression(lex).unwrap());
+            }
+        }
+        eprintln!("parsed return! next: {:?}", lex.clone().next());
+        return Some(Statement::Return(Return { vals }));
     }
     *lex = dup_lex;
     //eprintln!("{:?}", lex.clone().peekable().peek());

@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, Block}, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::Value};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, parse_comma_list, parse_paren_list, Block}, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::Value};
 
 #[derive(Clone)]
 pub struct Function {
@@ -43,17 +43,8 @@ impl FunctionCall {
         if let Some(Lexeme::Identifier(ident)) = lex.next() 
         && let Some(Lexeme::Seperator(Seperator::OpenParen)) = lex.next()
         {
-            println!("resolving function call");
-            let mut exps = Vec::new();
-            // parse expressions
-            while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(Seperator::CloseParen)) {
-                exps.push(parse_expression(lex).unwrap());
-                if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(Seperator::Comma)) {
-                    lex.next();
-                }
-            }
-            
-            assert_eq!(lex.next(), Some(Lexeme::Seperator(Seperator::CloseParen)));
+            //println!("resolving function call");
+            let exps = parse_paren_list(lex, parse_expression).unwrap();
             Some(FunctionCall::new(ident.clone(), exps))
         } else { None }
     }

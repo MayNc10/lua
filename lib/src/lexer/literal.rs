@@ -91,15 +91,10 @@ impl Token for StringLiteral {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum NumericValue {
-    Integer(i64),
-    Float(f64),
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct NumericLiteral {
-    value: NumericValue,
+    value: f64,
     raw: String,
 }
 
@@ -109,12 +104,10 @@ impl NumericLiteral {
         DECIMAL_RE.captures(s)
             .map(|captures| {
                 if captures.name("fraction").is_some_and(|s| s.len() > 1) || captures.name("base").is_some_and(|s| !s.is_empty()) {
-                    let value = if captures.name("fraction").is_some() {
-                        NumericValue::Float(captures[0].parse().expect("Regex matched decimal float, but parsing failed"))
-                    } else {
-                        NumericValue::Integer(captures[0].parse().expect("Regex matched decimal integer, but parsing failed"))
-                    };
-                    Some(NumericLiteral { value, raw: captures[0].to_string() })
+                    Some(NumericLiteral { 
+                        value: captures[0].parse().expect("Regex matched decimal float, but parsing failed"), 
+                        raw: captures[0].to_string() 
+                    })
                 } else { None }
             })
             .flatten()
@@ -164,11 +157,11 @@ impl NumericLiteral {
         })
     }
 
-    pub fn value(&self) -> NumericValue {
+    pub fn value(&self) -> f64 {
         self.value
     }
 
-    pub fn new(value: NumericValue, raw: String) -> NumericLiteral {
+    pub fn new(value: f64, raw: String) -> NumericLiteral {
         NumericLiteral { value, raw }
     }
 }

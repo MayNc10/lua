@@ -1,11 +1,11 @@
 // test basic lexing
 
-use crate::lexer::{literal::{NumericLiteral, NumericValue}, operator::Operator, Lexeme};
+use crate::lexer::{literal::NumericLiteral, operator::Operator, Lexeme};
 
 use super::Lexer;
 
 mod lexemes {
-    use crate::lexer::{literal::NumericValue, Lexeme, Lexer, Token};
+    use crate::lexer::{Lexeme, Lexer, Token};
 
     fn test_str_single_output(s: &str, value: &str) {
         let mut lexer = Lexer::new(s);
@@ -19,7 +19,7 @@ mod lexemes {
         assert_eq!(parsed_value.raw(), s);
     }
 
-    fn test_numeral_single_output(s: &str, value: NumericValue) {
+    fn test_numeral_single_output(s: &str, value: f64) {
         let mut lexer = Lexer::new(s);
         let parsed = lexer.next();
         assert!(parsed.is_some());
@@ -56,7 +56,7 @@ mod lexemes {
     fn basic_decimal() {
         let s = "115";
         let val = 115;
-        let wrapped = NumericValue::Integer(val);
+        let wrapped = val as f64;
         test_numeral_single_output(s, wrapped);
     }
 
@@ -64,16 +64,14 @@ mod lexemes {
     fn float_decimal() {
         let s = "3.1415";
         let val = 3.1415;
-        let wrapped = NumericValue::Float(val);
-        test_numeral_single_output(s, wrapped);
+        test_numeral_single_output(s, val);
     }
 
     #[test]
     fn exp_decimal() {
         let s = "0.31415e1";
         let val = 3.1415;
-        let wrapped = NumericValue::Float(val);
-        test_numeral_single_output(s, wrapped);
+        test_numeral_single_output(s, val);
     }
 
     #[test]
@@ -81,7 +79,7 @@ mod lexemes {
         // test fails, need to work on hex parsing
         let s = "0xA1";
         let val = 0xA1;
-        let wrapped = NumericValue::Integer(val);
+        let wrapped = val as f64;
         test_numeral_single_output(s, wrapped);
     }
 }
@@ -94,8 +92,8 @@ fn add_2() {
     let plus = l.next().unwrap();
     let two = l.next().unwrap();
 
-    assert!(five == Lexeme::NumericLiteral(NumericLiteral::new(NumericValue::Integer(5), "5".to_string())));
+    assert!(five == Lexeme::NumericLiteral(NumericLiteral::new(5 as f64, "5".to_string())));
     println!("{:?}", plus);
     assert!(plus == Lexeme::Operator(Operator::Plus));
-    assert!(two == Lexeme::NumericLiteral(NumericLiteral::new(NumericValue::Integer(2), "2".to_string())));
+    assert!(two == Lexeme::NumericLiteral(NumericLiteral::new(2 as f64, "2".to_string())));
 }

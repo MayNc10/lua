@@ -82,10 +82,7 @@ impl Expression {
         match self {
             Expression::NumericLiteral(nlit) => {
                 // FIXME
-                match nlit.value() {
-                    literal::NumericValue::Float(f) => Value::Number(f),
-                    literal::NumericValue::Integer(i) => Value::Number(i as f64),
-                }
+                Value::Number(nlit.value()) 
             },
             Expression::StringLiteral(slit) => {
                 Value::String(slit.value().to_string())
@@ -161,6 +158,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
     let mut opened_parens = 0;
 
     while let Some(tok) = lex.clone().peekable().peek() {
+        eprintln!("tok: {:?}\n op stack: {:?}\n arg_stack: {:?}\n\n", tok, operations, operands);
         match tok {
             Lexeme::Operator(op) => {
                 lex.next();
@@ -267,7 +265,14 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                             break;
                         }
                         lex.next();
-                        assert!(!last_was_arg);
+                        /* 
+                        if last_was_arg {
+                            eprintln!("didnt parse yet:");
+                            for lexeme in lex.clone() {
+                                eprintln!("{:?}", lexeme);
+                            }
+                        }
+                        assert!(!last_was_arg); */
                         last_was_arg = true;
                         operations.push(ExpOperation::CloseParen);
                     },
@@ -318,7 +323,10 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
             _ => break
         }
 
+        eprintln!("matched tok {:?}", tok);
         while last_was_arg && operations.len() > 0 {
+            eprintln!("in shunting yard processing");
+            eprintln!("top of op stack is {:?}", operations.last());
             if operations.len() > 1 {
                 let current = operations.pop().unwrap();
                 let previous = operations.pop().unwrap();
@@ -362,7 +370,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                 );
                 operands.push(new_arg);
             }
-            else { break }
+            else { eprintln!("breaking"); break }
         }
     } 
 
@@ -391,3 +399,4 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
 
     operands.pop()
 }
+
