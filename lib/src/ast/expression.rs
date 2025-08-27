@@ -324,7 +324,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
         }
 
         eprintln!("matched tok {:?}", tok);
-        while last_was_arg && operations.len() > 0 {
+        while !last_was_arg && operations.len() > 0 {
             eprintln!("in shunting yard processing");
             eprintln!("top of op stack is {:?}", operations.last());
             if operations.len() > 1 {
@@ -334,6 +334,14 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     // find matching open paren
                     // this code for wrapping a phrase is the same that is called at the end of parsing
                     // therefore, make that subroutine
+                    
+                    let mut start_idx = operations.len() - 1;
+                    while operations[start_idx] != ExpOperation::OpenParen {
+                        start_idx -= 1;
+                    }
+                    shunting_yard(&operations[start_idx + 1..], &mut operands);
+                    assert!(operations.pop().unwrap() == ExpOperation::OpenParen);
+                    operations.push(current);
                 }
                 if ExpOperation::precedence(previous, current) == Ordering::Greater {
                     // prev arg binds to last two operands
@@ -349,7 +357,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                 } else if ExpOperation::precedence(previous, current) == Ordering::Equal {
                     // we've already handled paren cases
                     // if op isnt exp, we can eval prev
-                    if previous != ExpOperation::Exp {
+                    if previous != ExpOperation::Exp && previous != ExpOperation::Concat {
                         // code duplication
                         // TODO: MERGE PATHS
                         let rhs = Box::new(operands.pop().unwrap());
@@ -359,16 +367,19 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                         );
                         operands.push(new_operand);
                         operations.push(current);
-                    } else { break }
+                    } else { todo!() }
                 }
                 else { break }
             } else if *operations.last().unwrap() ==  ExpOperation::UnaryMinus {
+                /* 
                 operations.pop();
                 let arg = Box::new(operands.pop().unwrap());
                 let new_arg = Expression::UnaryExp(
                     UnaryExpression { op: ExpOperation::UnaryMinus, arg }
                 );
                 operands.push(new_arg);
+                */
+                todo!();
             }
             else { eprintln!("breaking"); break }
         }
@@ -398,5 +409,20 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
     //println!("Operations: {:?}", operations);
 
     operands.pop()
+}
+
+fn shunting_yard(ops: &[ExpOperation], args: &mut Vec<Expression>) {
+    // invariant held by the algorithm is that operations are always sorted lowest associativity to highest
+    // when we get an op and see that the top of the stack has higher precedence we pack that op into an expression
+    // therefore, to finish the rest of these args, just go one by one top to bottom
+    for op in ops.iter().rev() {
+        if *op != ExpOperation::UnaryMinus {
+            if args.len() < 2 { break; }
+            let lhs = Box::new(args.pop().unwrap());
+            let rhs = Box::new(args.pop().unwrap());
+            let e = BinaryExpression { op: *op, lhs, rhs };
+            args.push(Expression::BinaryExp(e));
+        } else { todo!() }
+    }
 }
 

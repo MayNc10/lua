@@ -4,8 +4,8 @@ use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, func
 
 #[derive(Clone)]
 pub struct Assignment {
-    ident: Identifier,
-    exp: Expression, // maybe use the enum instead??
+    idents: Vec<Identifier>,
+    exps: Vec<Expression>,
     local: bool
 }
 
@@ -13,16 +13,28 @@ impl Assignment {
     pub fn print_tree(&self, depth: usize) {
         let tabs = "\t".repeat(depth);
         print!("{tabs}Assignment [ ");
-        print!("\t{} = {} ", self.ident, self.exp);
-        println!(" ]");
+        for ident in &self.idents {
+            print!("{ident} ");
+        }
+        print!("= ");
+        for exp in &self.exps {
+            print!("{exp} ");
+        }
+        println!("]");
     }
 }
 
 impl Display for Assignment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Assignment [ ")?;
-        write!(f, "\t{} = {} ", self.ident, self.exp)?;
-        write!(f, "]")
+        for ident in &self.idents {
+            write!(f, "{ident} ")?;
+        }
+        write!(f, "= ")?;
+        for exp in &self.exps {
+            write!(f, "{exp} ")?;
+        }
+        writeln!(f, "]")
     }
 }
 
@@ -232,8 +244,12 @@ impl Statement {
         match self {
             Statement::Assignment(a) => {
                 // FIXME: WE ARENT HANDLING LOCALS!
-                let val = a.exp.eval(ctx);
-                ctx.new_global(a.ident.clone(), val);
+
+                // evaulate expressions even if unused
+                let mut values = a.exps.iter().map(|e| e.eval(ctx)).collect::<Vec<_>>().into_iter();
+                for ident in &a.idents {
+                    ctx.new_global(ident.clone(), values.next().unwrap_or(Value::Nil));
+                }
             },
             Statement::Conditional(c) => {
                 for (exp, block) in &c.cases {
@@ -284,7 +300,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     if let Some(Lexeme::Identifier(i)) = lex.next() 
     {
         // try to parse more idents
-        let mut idents = Vec::new();
+        let mut idents = vec![i];
         let mut failed = false;
         while let Some(lx) = lex.next() && !matches!(lx, Lexeme::Assignment(_)) {
             if !matches!(lx, Lexeme::Seperator(seperator::Seperator::Comma)) {
@@ -296,8 +312,17 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
             } else { failed = true; break; }
         }
         if !failed { 
-//println!("parsed assignment!");
-        return Some(Statement::Assignment(Assignment {ident: i, exp, local: false}));
+            let mut exps = Vec::new();
+            if let Some(first_e) = parse_expression(lex) {
+                // assignments have to have at least one expression
+                exps.push(first_e);
+                while lex.clone().next() == Some(Lexeme::Seperator(seperator::Seperator::Comma)) {
+                    lex.next();
+                    exps.push(parse_expression(lex).unwrap());
+                }
+                //println!("parsed assignment!");
+                return Some(Statement::Assignment(Assignment {idents, exps, local: false}));
+            }
         }
     }
     *lex = dup_lex;
@@ -404,7 +429,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
 
         
 
-
+        panic!();
         //println!("parsed function def!");
         return Some(fdef);
     }
