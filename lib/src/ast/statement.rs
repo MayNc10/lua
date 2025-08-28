@@ -279,7 +279,23 @@ impl Statement {
                 let rv = r.vals.first().as_ref().map(|exp| exp.eval(ctx));
                 ctx.ret(rv);
             }
-            _ => todo!()
+            Statement::MethodCall(mcall) => {
+                eprintln!("Callig method {} on object {}", mcall.method.0, mcall.obj_name.0);
+                if mcall.obj_name.0 == "io" {
+                    if mcall.method.0 == "write" {
+                        for arg in &mcall.args {
+                            let v = arg.eval(ctx);
+                            match v {
+                                Value::String(s) => print!("{s}"),
+                                Value::Number(n) => print!("{n}"),
+                                _ => print!("{:?}", v)
+                            }
+                        }
+                    } else { todo!() }
+                } else { todo!() }
+                // FIXME!
+                //todo!();
+            }
         }
     }
 }
@@ -427,9 +443,6 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         fdef.print_tree(0);
         assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
 
-        
-
-        panic!();
         //println!("parsed function def!");
         return Some(fdef);
     }

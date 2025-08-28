@@ -4,6 +4,7 @@ use crate::{lexer::identifier::Identifier, value::Value};
 
 
 /// Holds current state context
+#[derive(Clone)]
 pub struct Ctx {
     // FIXME, SHOULD BE TABLE
     level: usize,
@@ -44,7 +45,7 @@ impl Ctx {
         // there must be a better way to do this
         let mut completely_empty = Vec::new();
         for (ident, values) in self.locals.iter_mut() {
-            *values = values.clone().into_iter().filter(|(_, level)| *level < self.level).collect();
+            *values = values.clone().into_iter().filter(|(_, level)| *level <= self.level).collect();
             values.sort_by(|(_, l1), (_, l2)| l1.cmp(l2));
             if values.is_empty() {
                 completely_empty.push(ident.clone());

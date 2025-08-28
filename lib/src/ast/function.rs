@@ -71,6 +71,7 @@ impl FunctionCall {
                 ctx.enter_block();
                 // add new locals
                 for arg in &fcode.args {
+                    eprintln!("Adding local {} with value {:?}", arg.0, val_iter.clone().next());
                     ctx.new_local(arg.clone(), val_iter.next().unwrap_or(Value::Nil));
                 }
                 if let Some(code) = fcode.code {

@@ -111,6 +111,12 @@ impl Expression {
                     }    
                 }
 
+                else if obj.0 == "math" && func.name().0 == "abs" {
+                    if let Some(Value::Number(n)) = func.args().first().map(|e| e.eval(ctx)) {
+                        Value::Number(n.abs())
+                    } else { panic!() }
+                }
+
                 else {
                     panic!("Method stuff is hacked together rn!");
                 }
@@ -134,7 +140,41 @@ impl Expression {
                             let rhs_val = b.rhs.eval(ctx);
                             Value::Boolean((lhs_val == rhs_val).into())
                         },
-                        _ => todo!()
+                        ExpOperation::NotEqual => {
+                            let lhs_val = b.lhs.eval(ctx);
+                            let rhs_val = b.rhs.eval(ctx);
+                            Value::Boolean((lhs_val != rhs_val).into())
+                        },
+                        ExpOperation::LessThan => {
+                            let lhs_val = b.lhs.eval(ctx).as_number().expect("BinOp lhs wasnt number");
+                            let rhs_val = b.rhs.eval(ctx).as_number().expect("BinOp rhs wasnt number");
+                            Value::Boolean((lhs_val < rhs_val).into())
+                        },
+                        ExpOperation::GreaterThan => {
+                            let lhs_val = b.lhs.eval(ctx).as_number().expect("BinOp lhs wasnt number");
+                            let rhs_val = b.rhs.eval(ctx).as_number().expect("BinOp rhs wasnt number");
+                            Value::Boolean((lhs_val > rhs_val).into())
+                        },
+                        ExpOperation::LessEqual => {
+                            let lhs_val = b.lhs.eval(ctx).as_number().expect("BinOp lhs wasnt number");
+                            let rhs_val = b.rhs.eval(ctx).as_number().expect("BinOp rhs wasnt number");
+                            Value::Boolean((lhs_val <= rhs_val).into())
+                        },
+                        ExpOperation::GreaterEqual => {
+                            let lhs_val = b.lhs.eval(ctx).as_number().expect("BinOp lhs wasnt number");
+                            let rhs_val = b.rhs.eval(ctx).as_number().expect("BinOp rhs wasnt number");
+                            Value::Boolean((lhs_val >= rhs_val).into())
+                        },
+                        // short circuits - should probably have a different branch
+                        ExpOperation::Or => {
+                            let lhs_val = b.lhs.eval(ctx).as_bool();
+                            Value::Boolean((lhs_val || b.rhs.eval(ctx).as_bool()).into())
+                        },
+                        ExpOperation::And => {
+                            let lhs_val = b.lhs.eval(ctx).as_bool();
+                            Value::Boolean((lhs_val && b.rhs.eval(ctx).as_bool()).into())
+                        }
+                        _ => panic!("Binop {:?} not yet implemented!", b.op)
                     }
                 }
             }     
@@ -334,16 +374,17 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     // find matching open paren
                     // this code for wrapping a phrase is the same that is called at the end of parsing
                     // therefore, make that subroutine
+                    eprintln!("parsing close paren, current token is {:?}, stack is {:?}", current, operations);
                     
                     let mut start_idx = operations.len() - 1;
                     while operations[start_idx] != ExpOperation::OpenParen {
                         start_idx -= 1;
                     }
                     shunting_yard(&operations[start_idx + 1..], &mut operands);
-                    assert!(operations.pop().unwrap() == ExpOperation::OpenParen);
+                    operations.truncate(start_idx);
                     operations.push(current);
                 }
-                if ExpOperation::precedence(previous, current) == Ordering::Greater {
+                else if ExpOperation::precedence(previous, current) == Ordering::Greater {
                     // prev arg binds to last two operands
                     if previous != ExpOperation::OpenParen {
                         let rhs = Box::new(operands.pop().unwrap());
@@ -353,6 +394,10 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                         );
                         operands.push(new_operand);
                         operations.push(current);
+                    } else {
+                        operations.push(previous); 
+                        operations.push(current);
+                        break;
                     }
                 } else if ExpOperation::precedence(previous, current) == Ordering::Equal {
                     // we've already handled paren cases
@@ -369,7 +414,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                         operations.push(current);
                     } else { todo!() }
                 }
-                else { break }
+                else { operations.push(previous); operations.push(current); break; }
             } else if *operations.last().unwrap() ==  ExpOperation::UnaryMinus {
                 /* 
                 operations.pop();

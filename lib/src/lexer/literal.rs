@@ -61,16 +61,24 @@ impl StringLiteral {
             })
     }
     
+    fn replace_escapes(s: String) -> String {
+        s.replace("\\n", "\n")
+            .replace("\\\\", "\\")
+            .replace("\\\'", "\'")
+            .replace("\\\"", "\"")
+            .replace("\\t", "\t")
+    }
+
     pub fn from_str(s: &str) -> Option<StringLiteral> {
         // try to match short string
         if let Some(capture) = SHORT_LITERAL_STR_RE.captures(s) {
             Some(StringLiteral { 
                 kind: StringLiteralKind::Short, 
-                s: capture
+                s: Self::replace_escapes(capture
                     .name("single_str")
                     .unwrap_or_else(|| capture.name("double_str")
                         .expect("One of single_str, double_str should be captured"))
-                    .as_str().to_string(), 
+                    .as_str().to_string()), 
                 raw: capture[0].to_string()
             })
         } else { StringLiteral::match_long_str(s) }

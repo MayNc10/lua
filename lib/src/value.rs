@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::ast::{function::Function, Block};
 
 pub mod meta;
@@ -33,6 +35,29 @@ impl Value {
             Value::String(s) => s.trim().parse().ok(),
             _ => None
         }
+    }
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Value::Nil | Value::Boolean(Boolean::False) => false,
+            _ => true,
+        }
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Value [ ")?;
+        match self {
+            Value::Nil => write!(f, "Nil"),
+            Value::Boolean(b) => write!(f, "Bool( {b:?} )"),
+            Value::Number(n) => write!(f, "Number( {n} )"),
+            Value::String(s) => write!(f, "String( {s} )"),
+            Value::Userdata => write!(f, "Userdata"),
+            Value::Function(func) => write!(f, "Function", ),
+            Value::Thread => write!(f, "Thread"),
+            Value::Table => write!(f, "Table"),
+        }?;
+        write!(f, " ]")
     }
 }
 
