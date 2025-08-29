@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{Boolean, Value}};
+use crate::{ast::{Block, context::Ctx, expression::{Expression, parse_expression}, function::{Function, FunctionCall, MethodCall}, parse_paren_list}, lexer::{self, Lexeme, Lexer, identifier::Identifier, seperator}, value::{Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
@@ -89,39 +89,6 @@ pub struct Goto {}
 pub struct Label {}
 pub struct ForStatement {}
 
-#[derive(Clone)]
-pub struct MethodCall {
-    obj_name: Identifier,
-    method: Identifier,
-    args: Vec<Expression>,
-}
-
-impl MethodCall {
-    pub fn print_tree(&self, depth: usize) {
-        let tabs = "\t".repeat(depth);
-        print!("{tabs}MethodCall [ {}.{}(", self.obj_name, self.method);
-        if self.args.len() > 0 {
-            for arg in &self.args[0..self.args.len() - 1] {
-                print!("{tabs}{arg}, ");
-            }
-            print!("{tabs}{}", self.args.last().unwrap());
-        } else { print!("{tabs}void"); }
-        println!("{tabs}) ]");
-    }
-}
-
-impl Display for MethodCall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MethodCall [ {}.{}(", self.obj_name, self.method)?;
-        if self.args.len() > 0 {
-            for arg in &self.args[0..self.args.len() - 1] {
-                write!(f, "{arg}, ")?;
-            }
-            write!(f, "{}", self.args.last().unwrap())?;
-        } else { write!(f, "void")?; }
-        write!(f, ") ]")
-    }
-}
 
 #[derive(Clone)]
 pub struct FunctionDef {
@@ -252,15 +219,15 @@ impl Statement {
                 }
             },
             Statement::Conditional(c) => {
+                eprintln!("\nResolving conditional with cases {:?}\n", c.cases.iter().map(|c| c.0.clone()).collect::<Vec<_>>());
                 for (exp, block) in &c.cases {
-                    match exp.eval(ctx) {
-                        Value::Boolean(Boolean::False) | Value::Nil => {},
-                        _ => {
-                            if let Some(block) = block {
-                                block.walk(ctx);
-                            }
-                            return;
+                    let res = exp.eval(ctx).as_bool();
+                    eprintln!("\nChecked exp {:?}, result: {:?}\n", exp, res);
+                    if res {
+                        if let Some(block) = block {
+                            block.walk(ctx);
                         }
+                        return;
                     }
                 }
                 if let Some(block) = &c.fallback {
@@ -280,21 +247,7 @@ impl Statement {
                 ctx.ret(rv);
             }
             Statement::MethodCall(mcall) => {
-                eprintln!("Callig method {} on object {}", mcall.method.0, mcall.obj_name.0);
-                if mcall.obj_name.0 == "io" {
-                    if mcall.method.0 == "write" {
-                        for arg in &mcall.args {
-                            let v = arg.eval(ctx);
-                            match v {
-                                Value::String(s) => print!("{s}"),
-                                Value::Number(n) => print!("{n}"),
-                                _ => print!("{:?}", v)
-                            }
-                        }
-                    } else { todo!() }
-                } else { todo!() }
-                // FIXME!
-                //todo!();
+                mcall.call(ctx);
             }
         }
     }
@@ -385,43 +338,14 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     }                                                                                                                                                                                                                               
     *lex = dup_lex;
     // parse functioncall
-    if let Some(Lexeme::Identifier(name)) = lex.next()
-        && let Some(Lexeme::Seperator(seperator::Seperator::OpenParen)) = lex.next()
+    if let Some(fcall) = FunctionCall::parse(lex)
     {
-        // parse args
-        let mut args = Vec::new();
-        // THIS IS DUPLICATED CODE FROM EXPRESSION IDENT PARSING
-        while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-            let arg = parse_expression(lex).unwrap();
-            args.push(arg);
-            if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
-                lex.next();
-            }
-        }
-        lex.next(); 
-        //println!("Parsed function call, func name {:?}", name);
-        return Some(Statement::FunctionCall(FunctionCall::new(name, args)));
+        return Some(Statement::FunctionCall(fcall));
     }
     *lex = dup_lex;
     // parse method call
-    if let Some(Lexeme::Identifier(obj)) = lex.next()
-        && let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.next()
-        && let Some(Lexeme::Identifier(method)) = lex.next()
-        && let Some(Lexeme::Seperator(seperator::Seperator::OpenParen)) = lex.next()
-    {
-        // parse args
-        let mut args = Vec::new();
-        // THIS IS DUPLICATED CODE FROM EXPRESSION IDENT PARSING
-        while lex.clone().peekable().peek() != Some(&Lexeme::Seperator(seperator::Seperator::CloseParen)) {
-            let arg = parse_expression(lex).unwrap();
-            args.push(arg);
-            if lex.clone().peekable().peek() == Some(&Lexeme::Seperator(seperator::Seperator::Comma)) {
-                lex.next();
-            }
-        }
-        lex.next(); 
-        println!("Parsed method call, obj name {:?}, method name {:?}", obj, method);
-        return Some(Statement::MethodCall(MethodCall { obj_name: obj, method, args }));
+    if let Some(mcall) = MethodCall::parse(lex) {
+        return Some(Statement::MethodCall(mcall));
     }
     *lex = dup_lex;
     // parse functiondef                                                                                                        

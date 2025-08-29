@@ -56,6 +56,9 @@ impl Block {
     pub fn walk(&self, ctx: &mut Ctx) {
         for st in &self.statements {
             st.walk(ctx);
+            if ctx.did_return() {
+                return;
+            }
         }
     }
 }

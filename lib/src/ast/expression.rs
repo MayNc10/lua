@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}, io};
 
-use crate::{ast::{context::Ctx, function::FunctionCall}, lexer::{self, identifier::{self, Identifier}, literal, operator, seperator, Lexeme, Lexer}, value::Value};
+use crate::{ast::{context::Ctx, function::{FunctionCall, MethodCall}}, lexer::{self, Lexeme, Lexer, identifier::{self, Identifier}, literal, operator, seperator}, value::Value};
 
 pub struct TableExpression {}
 
@@ -71,7 +71,7 @@ pub enum Expression {
     StringLiteral(literal::StringLiteral),
     Identifier(identifier::Identifier),
     FuncCall(FunctionCall),
-    MethodCall(identifier::Identifier, FunctionCall),
+    MethodCall(MethodCall),
     BinaryExp(BinaryExpression),
     UnaryExp(UnaryExpression)
     // TODO: TABLES!
@@ -93,33 +93,8 @@ impl Expression {
             Expression::FuncCall(fcall) => {
                 fcall.call(ctx)
             },
-            Expression::MethodCall(obj, func) => {
-                // FIXME!
-                if obj.0 == "io" && func.name().0 == "read" {
-                    let mut buf = String::new();
-                    let stdin = io::stdin();
-                    stdin.read_line(&mut buf).unwrap();
-
-                    // check args
-                    if let Some(a) = func.args().first() 
-                    && let Value::String(s) = a.eval(ctx) 
-                    && &s.as_str()[0..1] == "n" 
-                    {
-                        Value::Number(buf.trim().parse().unwrap())
-                    } else {
-                        Value::String(buf)   
-                    }    
-                }
-
-                else if obj.0 == "math" && func.name().0 == "abs" {
-                    if let Some(Value::Number(n)) = func.args().first().map(|e| e.eval(ctx)) {
-                        Value::Number(n.abs())
-                    } else { panic!() }
-                }
-
-                else {
-                    panic!("Method stuff is hacked together rn!");
-                }
+            Expression::MethodCall(mcall) => {
+                mcall.call(ctx)
             },
             Expression::BinaryExp(b) => {
                 if b.op.is_arith_op() {
@@ -134,7 +109,7 @@ impl Expression {
                         _ => unreachable!()
                     })
                 } else {
-                    match b.op {
+                    let v = match b.op {
                         ExpOperation::Equals => {
                             let lhs_val = b.lhs.eval(ctx);
                             let rhs_val = b.rhs.eval(ctx);
@@ -175,7 +150,9 @@ impl Expression {
                             Value::Boolean((lhs_val && b.rhs.eval(ctx).as_bool()).into())
                         }
                         _ => panic!("Binop {:?} not yet implemented!", b.op)
-                    }
+                    };
+                    eprintln!("RESOLVING OP {:?} on lhs {:?}, rhs {:?}, EVALUATED TO {:?}", b.op, b.lhs, b.rhs, v);
+                    v
                 }
             }     
             _ => panic!("Expression kind {:?} not yet implemented!", self)
@@ -198,7 +175,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
     let mut opened_parens = 0;
 
     while let Some(tok) = lex.clone().peekable().peek() {
-        eprintln!("tok: {:?}\n op stack: {:?}\n arg_stack: {:?}\n\n", tok, operations, operands);
+        //eprintln!("tok: {:?}\n op stack: {:?}\n arg_stack: {:?}\n\n", tok, operations, operands);
         match tok {
             Lexeme::Operator(op) => {
                 lex.next();
@@ -280,12 +257,12 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     lexer::AngleBrackets::Open => {
                         assert!(last_was_arg);
                         last_was_arg = false;
-                        operations.push(ExpOperation::GreaterThan);
+                        operations.push(ExpOperation::LessThan);
                     },
                     lexer::AngleBrackets::Close => {
                         assert!(last_was_arg);
                         last_was_arg = false;
-                        operations.push(ExpOperation::LessThan);
+                        operations.push(ExpOperation::GreaterThan);
                     }
                 }
             },
@@ -327,25 +304,18 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     break;
                 }
                 let mut dup_lex = lex.clone();
-                lex.next();
                 last_was_arg = true;
                 if let Some(funccall) = FunctionCall::parse(&mut dup_lex) {
                     operands.push(Expression::FuncCall(funccall));
-                    *lex = dup_lex
+                    *lex = dup_lex;
+                }
+                else if let Some(mcall) = MethodCall::parse({ dup_lex = lex.clone(); &mut dup_lex }) {
+                    operands.push(Expression::MethodCall(mcall));
+                    *lex = dup_lex;
                 }
                 else {
-                    if let Some(Lexeme::Seperator(seperator::Seperator::Dot)) = lex.clone().peekable().peek()
-                    {
-                        // terrible way to peek!!!
-                        lex.next();
-                        if let Some(funccall) = FunctionCall::parse(lex) {
-                            operands.push(Expression::MethodCall(ident.clone(), funccall));
-                        }
-                        else { panic!("Parsed ident and dot, failed parsing method") }
-                    }
-                    else {
-                        operands.push(Expression::Identifier(ident.clone()));
-                    }
+                    lex.next();
+                    operands.push(Expression::Identifier(ident.clone()));
                 }        
             },
             Lexeme::NumericLiteral(nlit) => {
@@ -363,10 +333,10 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
             _ => break
         }
 
-        eprintln!("matched tok {:?}", tok);
+        //eprintln!("matched tok {:?}", tok);
         while !last_was_arg && operations.len() > 0 {
-            eprintln!("in shunting yard processing");
-            eprintln!("top of op stack is {:?}", operations.last());
+            //eprintln!("in shunting yard processing");
+            //eprintln!("top of op stack is {:?}", operations.last());
             if operations.len() > 1 {
                 let current = operations.pop().unwrap();
                 let previous = operations.pop().unwrap();
@@ -374,7 +344,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     // find matching open paren
                     // this code for wrapping a phrase is the same that is called at the end of parsing
                     // therefore, make that subroutine
-                    eprintln!("parsing close paren, current token is {:?}, stack is {:?}", current, operations);
+                    //eprintln!("parsing close paren, current token is {:?}, stack is {:?}", current, operations);
                     
                     let mut start_idx = operations.len() - 1;
                     while operations[start_idx] != ExpOperation::OpenParen {
@@ -426,7 +396,9 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                 */
                 todo!();
             }
-            else { eprintln!("breaking"); break }
+            else { //eprintln!("breaking"); 
+                break 
+            }
         }
     } 
 

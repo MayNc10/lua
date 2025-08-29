@@ -60,4 +60,8 @@ impl Ctx {
     pub fn ret(&mut self, v: Option<Value>) {
         self.ret_val = v;
     }
+
+    pub fn did_return(&self) -> bool {
+        self.ret_val.is_some()
+    }
 }

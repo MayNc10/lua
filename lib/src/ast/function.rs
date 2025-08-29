@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::{fmt::{Debug, Display}, io};
 
 use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, parse_comma_list, parse_paren_list, Block}, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::Value};
 
@@ -88,6 +88,102 @@ impl FunctionCall {
 impl Display for FunctionCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FunctionCall [ {}(", self.name)?;
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                write!(f, "{arg}, ")?;
+            }
+            write!(f, "{}", self.args.last().unwrap())?;
+        } else { write!(f, "void")?; }
+        write!(f, ") ]")
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct MethodCall {
+    obj: Identifier,
+    method: Identifier,
+    args: Vec<Expression>,
+}
+
+impl MethodCall {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        print!("{tabs}MethodCall [ {}.{}(", self.obj, self.method);
+        if self.args.len() > 0 {
+            for arg in &self.args[0..self.args.len() - 1] {
+                print!("{tabs}{arg}, ");
+            }
+            print!("{tabs}{}", self.args.last().unwrap());
+        } else { print!("{tabs}void"); }
+        println!("{tabs}) ]");
+    }
+
+    pub fn obj_name(&self) -> &str {
+        self.obj.0.as_str()
+    }
+
+    pub fn method_name(&self) -> &str {
+        self.method.0.as_str()
+    }
+
+    pub fn parse(lex: &mut Lexer) -> Option<MethodCall> {
+        println!("parsing method call!");
+        if let Some(Lexeme::Identifier(obj)) = lex.next()
+            && let Some(Lexeme::Seperator(Seperator::Dot)) = lex.next()
+            && let Some(fcall) = FunctionCall::parse(lex)
+        {
+            
+            println!("Parsed method call, obj name {:?}, method name {:?}", obj, fcall.name);
+            return Some(MethodCall { obj, method: fcall.name, args: fcall.args });
+        } else { None }
+    }
+
+    pub fn call(&self, ctx: &mut Ctx) -> Value {
+        eprintln!("Calling method {} on object {}", self.method.0, self.obj.0);
+        if self.obj.0 == "io" && self.method.0 == "read" {
+            let mut buf = String::new();
+            let stdin = io::stdin();
+            stdin.read_line(&mut buf).unwrap();
+
+            // check args
+            if let Some(a) = self.args.first() 
+            && let Value::String(s) = a.eval(ctx) 
+            && &s.as_str()[0..1] == "n" 
+            {
+                Value::Number(buf.trim().parse().unwrap())
+            } else {
+                Value::String(buf)   
+            }    
+        }
+
+        else if self.obj.0 == "io" && self.method.0 == "write" {
+            for arg in &self.args {
+                let v = arg.eval(ctx);
+                match v {
+                    Value::String(s) => print!("{s}"),
+                    Value::Number(n) => print!("{n}"),
+                    _ => print!("{:?}", v)
+                }
+            }
+            Value::Nil
+        }
+
+        else if self.obj.0 == "math" && self.method.0 == "abs" {
+            if let Some(Value::Number(n)) = self.args.first().map(|e| e.eval(ctx)) {
+                Value::Number(n.abs())
+            } else { panic!() }
+        }
+
+        else {
+            panic!("Method stuff is hacked together rn!");
+        }
+    }
+}
+
+impl Display for MethodCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MethodCall [ {}.{}(", self.obj, self.method)?;
         if self.args.len() > 0 {
             for arg in &self.args[0..self.args.len() - 1] {
                 write!(f, "{arg}, ")?;
