@@ -1,10 +1,11 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash, rc::Rc};
 
-use crate::ast::{function::Function, Block};
+use crate::{ast::{function::Function, Block}, value::table::Table};
 
 pub mod meta;
+pub mod table;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
     Nil,
     Boolean(Boolean),
@@ -13,7 +14,7 @@ pub enum Value {
     Userdata,
     Function(Function),
     Thread,
-    Table,
+    Table(Rc<Table>),
     // fixme?
     RetVals(Vec<Value>),
 }
@@ -28,7 +29,7 @@ impl Value {
             Value::Userdata => "Userdata",
             Value::Function(_) => "Function",
             Value::Thread => "Thread",
-            Value::Table => "Table",
+            Value::Table(_) => "Table",
             Value::RetVals(_) => "Multiple return values"
         }
     }
@@ -71,6 +72,51 @@ pub fn flatten_values(vals: Vec<Value>) -> Vec<Value> {
     flat
 }
 
+// FIXME: SUCKS!
+impl std::hash::Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Nil => {
+                state.write_u8(1);
+            },
+            Value::Boolean(b) => {
+                state.write_u8(2);
+                b.hash(state);
+            },
+            Value::Number(n) => {
+                state.write_u8(3);
+                if n.is_nan() { panic!("hashed value was nan") }
+                n.to_bits().hash(state);
+            },
+            Value::String(s) => {
+                state.write_u8(4);
+                s.hash(state);
+            },
+            Value::Userdata => {
+                state.write_u8(5);
+            },
+            Value::Function(f) => {
+                state.write_u8(6);
+                todo!()
+            },
+            Value::Thread => {
+                state.write_u8(7);
+            },
+            Value::Table(tb) => {
+                state.write_u8(8);
+                Rc::as_ptr(tb).hash(state);
+            },
+            Value::RetVals(rv) => {
+                state.write_u8(9);
+                rv.hash(state);
+            },
+        }
+    }
+}
+
+// BAD! VERY VERY BAD!
+impl Eq for Value {}
+
 impl Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Value [ ")?;
@@ -82,33 +128,17 @@ impl Debug for Value {
             Value::Userdata => write!(f, "Userdata"),
             Value::Function(func) => write!(f, "Function", ),
             Value::Thread => write!(f, "Thread"),
-            Value::Table => write!(f, "Table"),
+            Value::Table(_) => write!(f, "Table"),
             Value::RetVals(rv) => write!(f, "Return values: {rv:?}")
         }?;
         write!(f, " ]")
     }
 }
 
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Nil, Value::Nil) => true,
-            (Value::Boolean(b1), Value::Boolean(b2)) => b1 == b2,
-            (Value::Number(n1), Value::Number(n2)) => n1 == n2,
-            (Value::String(s1), Value::String(s2)) => s1 == s2,
-            (Value::Userdata, Value::Userdata) => todo!(),
-            (Value::Function(f1), Value::Function(f2)) => todo!(),
-            (Value::Thread, Value::Thread) => todo!(),
-            (Value::Table, Value::Table) => todo!(),
-            _ => false,
-        }
-    }
-}
-
 // just putting this here bc its so simple
 // FIXME: why is this not just a bool lmao?
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Boolean {
     True, 
     False,
