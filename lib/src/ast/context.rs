@@ -10,12 +10,12 @@ pub struct Ctx {
     level: usize,
     globals: HashMap<Identifier, Value>,
     locals: HashMap<Identifier, Vec<(Value, usize)>>,
-    ret_val: Option<Value>, 
+    ret_vals: Vec<Value>, 
 }
 
 impl Ctx {
     pub fn new() -> Ctx {
-        Ctx { level: 0, globals: HashMap::new(), locals: HashMap::new(), ret_val: None }
+        Ctx { level: 0, globals: HashMap::new(), locals: HashMap::new(), ret_vals: Vec::new() }
     }
 
     pub fn get_var(&self, ident: &Identifier) -> Option<Value> {
@@ -39,7 +39,7 @@ impl Ctx {
         self.level += 1;
     }
 
-    pub fn leave_block(&mut self) -> Option<Value> {
+    pub fn leave_block(&mut self) -> Vec<Value> {
         self.level -= 1;
         // get rid of old locals
         // there must be a better way to do this
@@ -54,14 +54,14 @@ impl Ctx {
         for ident in completely_empty {
             self.locals.remove(&ident);
         }
-        self.ret_val.take()
+        self.ret_vals.split_off(0)
     }
 
-    pub fn ret(&mut self, v: Option<Value>) {
-        self.ret_val = v;
+    pub fn ret(&mut self, v: Vec<Value>) {
+        self.ret_vals = v;
     }
 
     pub fn did_return(&self) -> bool {
-        self.ret_val.is_some()
+        !self.ret_vals.is_empty()
     }
 }

@@ -109,7 +109,7 @@ impl Expression {
                         _ => unreachable!()
                     })
                 } else {
-                    let v = match b.op {
+                    match b.op {
                         ExpOperation::Equals => {
                             let lhs_val = b.lhs.eval(ctx);
                             let rhs_val = b.rhs.eval(ctx);
@@ -150,9 +150,7 @@ impl Expression {
                             Value::Boolean((lhs_val && b.rhs.eval(ctx).as_bool()).into())
                         }
                         _ => panic!("Binop {:?} not yet implemented!", b.op)
-                    };
-                    eprintln!("RESOLVING OP {:?} on lhs {:?}, rhs {:?}, EVALUATED TO {:?}", b.op, b.lhs, b.rhs, v);
-                    v
+                    }
                 }
             }     
             _ => panic!("Expression kind {:?} not yet implemented!", self)
@@ -282,14 +280,6 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                             break;
                         }
                         lex.next();
-                        /* 
-                        if last_was_arg {
-                            eprintln!("didnt parse yet:");
-                            for lexeme in lex.clone() {
-                                eprintln!("{:?}", lexeme);
-                            }
-                        }
-                        assert!(!last_was_arg); */
                         last_was_arg = true;
                         operations.push(ExpOperation::CloseParen);
                     },

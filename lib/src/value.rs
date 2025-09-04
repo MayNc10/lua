@@ -14,6 +14,8 @@ pub enum Value {
     Function(Function),
     Thread,
     Table,
+    // fixme?
+    RetVals(Vec<Value>),
 }
 
 impl Value {
@@ -27,21 +29,46 @@ impl Value {
             Value::Function(_) => "Function",
             Value::Thread => "Thread",
             Value::Table => "Table",
+            Value::RetVals(_) => "Multiple return values"
         }
     }
     pub fn as_number(&self) -> Option<f64> {
         match self {
             Value::Number(n) => Some(*n),
             Value::String(s) => s.trim().parse().ok(),
+            Value::RetVals(rv) => rv.first().and_then(|v| v.as_number()),
             _ => None
         }
     }
+
     pub fn as_bool(&self) -> bool {
         match self {
             Value::Nil | Value::Boolean(Boolean::False) => false,
             _ => true,
         }
     }
+
+    pub fn as_string(&self) -> Option<String> {
+        match self {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        }
+    }
+}
+
+pub fn flatten_values(vals: Vec<Value>) -> Vec<Value> {
+    let mut flat = Vec::with_capacity(vals.len());
+    for val in vals {
+        match val {
+            Value::RetVals(rv) => {
+                let mut flat_rv = flatten_values(rv);
+                flat.append(&mut flat_rv);
+            },
+            _ => flat.push(val),
+        }
+    }
+    flat
 }
 
 impl Debug for Value {
@@ -56,6 +83,7 @@ impl Debug for Value {
             Value::Function(func) => write!(f, "Function", ),
             Value::Thread => write!(f, "Thread"),
             Value::Table => write!(f, "Table"),
+            Value::RetVals(rv) => write!(f, "Return values: {rv:?}")
         }?;
         write!(f, " ]")
     }

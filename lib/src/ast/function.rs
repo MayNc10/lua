@@ -1,6 +1,6 @@
 use std::{fmt::{Debug, Display}, io};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, parse_comma_list, parse_paren_list, Block}, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::Value};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, parse_comma_list, parse_paren_list, Block}, builtins, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::{flatten_values, Value}};
 
 #[derive(Clone)]
 pub struct Function {
@@ -71,13 +71,15 @@ impl FunctionCall {
                 ctx.enter_block();
                 // add new locals
                 for arg in &fcode.args {
-                    eprintln!("Adding local {} with value {:?}", arg.0, val_iter.clone().next());
                     ctx.new_local(arg.clone(), val_iter.next().unwrap_or(Value::Nil));
                 }
                 if let Some(code) = fcode.code {
                     code.walk(ctx);
                 }
-                ctx.leave_block().unwrap_or(Value::Nil)
+                let mut rvs = flatten_values(ctx.leave_block());
+                if rvs.is_empty() { Value::Nil }
+                else if rvs.len() == 1 { rvs.pop().unwrap() }
+                else { Value::RetVals(rvs) }
             },
             // FIXME
             _ => { panic!("function not defined, handle this error gracefully!") }
@@ -128,19 +130,15 @@ impl MethodCall {
     }
 
     pub fn parse(lex: &mut Lexer) -> Option<MethodCall> {
-        println!("parsing method call!");
         if let Some(Lexeme::Identifier(obj)) = lex.next()
             && let Some(Lexeme::Seperator(Seperator::Dot)) = lex.next()
             && let Some(fcall) = FunctionCall::parse(lex)
         {
-            
-            println!("Parsed method call, obj name {:?}, method name {:?}", obj, fcall.name);
             return Some(MethodCall { obj, method: fcall.name, args: fcall.args });
         } else { None }
     }
 
     pub fn call(&self, ctx: &mut Ctx) -> Value {
-        eprintln!("Calling method {} on object {}", self.method.0, self.obj.0);
         if self.obj.0 == "io" && self.method.0 == "read" {
             let mut buf = String::new();
             let stdin = io::stdin();
@@ -173,6 +171,12 @@ impl MethodCall {
             if let Some(Value::Number(n)) = self.args.first().map(|e| e.eval(ctx)) {
                 Value::Number(n.abs())
             } else { panic!() }
+        }
+
+        else if self.obj.0 == "string" && self.method.0 == "format" {
+            let s = self.args[0].eval(ctx).as_string().expect("format string arg wasnt string");
+            let vals = self.args[1..].iter().map(|e| e.eval(ctx)).collect();
+            Value::String(builtins::string::format(&s, &vals))
         }
 
         else {

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use crate::{ast::{Block, context::Ctx, expression::{Expression, parse_expression}, function::{Function, FunctionCall, MethodCall}, parse_paren_list}, lexer::{self, Lexeme, Lexer, identifier::Identifier, seperator}, value::{Boolean, Value}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall, MethodCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{flatten_values, Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
@@ -213,16 +213,14 @@ impl Statement {
                 // FIXME: WE ARENT HANDLING LOCALS!
 
                 // evaulate expressions even if unused
-                let mut values = a.exps.iter().map(|e| e.eval(ctx)).collect::<Vec<_>>().into_iter();
+                let mut values = flatten_values(a.exps.iter().map(|e| e.eval(ctx)).collect::<>()).into_iter();
                 for ident in &a.idents {
                     ctx.new_global(ident.clone(), values.next().unwrap_or(Value::Nil));
                 }
             },
             Statement::Conditional(c) => {
-                eprintln!("\nResolving conditional with cases {:?}\n", c.cases.iter().map(|c| c.0.clone()).collect::<Vec<_>>());
                 for (exp, block) in &c.cases {
                     let res = exp.eval(ctx).as_bool();
-                    eprintln!("\nChecked exp {:?}, result: {:?}\n", exp, res);
                     if res {
                         if let Some(block) = block {
                             block.walk(ctx);
@@ -243,7 +241,7 @@ impl Statement {
             },
             Statement::Return(r) => {
                 // FIXME
-                let rv = r.vals.first().as_ref().map(|exp| exp.eval(ctx));
+                let rv = r.vals.iter().map(|exp| exp.eval(ctx)).collect();
                 ctx.ret(rv);
             }
             Statement::MethodCall(mcall) => {
@@ -304,7 +302,6 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         let then_kw = lex.next();
         let code = Block::parse(lex);
         cases.push((test, code));
-        eprintln!("parsed main if block");
         // FIXME: shitty stupid hack
         let mut hit_end = false;
         loop {
@@ -324,7 +321,6 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
                 },
 
                 Some(Lexeme::Keyword(lexer::keyword::Keyword::End)) => {
-                    eprintln!("reached end kw!");
                     hit_end = true;
                     break
                 },
@@ -358,13 +354,10 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
             if let Some(Lexeme::Identifier(ident)) = l.next() {
                 Some(ident)
             } else { None }
-        ).unwrap(); 
-        eprintln!("Successfully parsed args!");                                                                                                                                                                                                                                                       
+        ).unwrap();                                                                                                                                                                                                                                               
         let code = Block::parse(lex);
-        eprintln!("Sucessfully parsed code!");
         let end_kw = lex.next();
         let fdef = Statement::FunctionDef(FunctionDef { name, func: Function { args, code } });
-        fdef.print_tree(0);
         assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
 
         //println!("parsed function def!");
@@ -383,7 +376,6 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
                 vals.push(parse_expression(lex).unwrap());
             }
         }
-        eprintln!("parsed return! next: {:?}", lex.clone().next());
         return Some(Statement::Return(Return { vals }));
     }
     *lex = dup_lex;
