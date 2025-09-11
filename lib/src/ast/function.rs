@@ -3,9 +3,44 @@ use std::{fmt::{Debug, Display}, io};
 use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, parse_comma_list, parse_paren_list, Block}, builtins, lexer::{identifier::Identifier, seperator::Seperator, Lexeme, Lexer}, value::{flatten_values, Value}};
 
 #[derive(Clone)]
-pub struct Function {
+pub struct LuaFunction {
     pub args: Vec<Identifier>,
     pub code: Option<Block>,
+}
+
+#[derive(Clone)]
+pub enum Function {
+    LuaFunction(LuaFunction),
+    Builtin(fn(&Vec<Value>) -> Vec<Value>),
+}
+
+impl Function {
+    pub fn call(&self, args: &Vec<Expression>, ctx: &mut Ctx) -> Value {
+        let arg_vals = args.iter().map(|e| e.eval(ctx)).collect::<Vec<_>>();
+        let mut rvs = flatten_values(
+        match self {
+                Function::LuaFunction(lfunc) => {
+                    // resolve argument expressions
+                    let mut val_iter = arg_vals.into_iter();
+                    ctx.enter_block();
+                    // add new locals
+                    for arg in &lfunc.args {
+                        ctx.new_local(arg.clone(), val_iter.next().unwrap_or(Value::Nil));
+                    }
+                    if let Some(code) = &lfunc.code {
+                        code.walk(ctx);
+                    }
+                    ctx.leave_block()
+                    
+                }
+                Function::Builtin(bfunc) => {
+                    bfunc(&arg_vals)
+                }
+        });   
+        if rvs.is_empty() { Value::Nil }
+        else if rvs.len() == 1 { rvs.pop().unwrap() }
+        else { Value::RetVals(rvs) }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -65,21 +100,7 @@ impl FunctionCall {
         }
         match ctx.get_var(&self.name) {
             Some(Value::Function(fcode)) => {
-                // resolve argument expressions
-                let arg_vals= self.args.iter().map(|e| e.eval(ctx)).collect::<Vec<_>>();
-                let mut val_iter = arg_vals.into_iter();
-                ctx.enter_block();
-                // add new locals
-                for arg in &fcode.args {
-                    ctx.new_local(arg.clone(), val_iter.next().unwrap_or(Value::Nil));
-                }
-                if let Some(code) = fcode.code {
-                    code.walk(ctx);
-                }
-                let mut rvs = flatten_values(ctx.leave_block());
-                if rvs.is_empty() { Value::Nil }
-                else if rvs.len() == 1 { rvs.pop().unwrap() }
-                else { Value::RetVals(rvs) }
+                fcode.call(&self.args, ctx)
             },
             // FIXME
             _ => { panic!("function not defined, handle this error gracefully!") }
@@ -139,7 +160,7 @@ impl MethodCall {
     }
 
     pub fn call(&self, ctx: &mut Ctx) -> Value {
-        if self.obj.0 == "io" && self.method.0 == "read" {
+        /*if self.obj.0 == "io" && self.method.0 == "read" {
             let mut buf = String::new();
             let stdin = io::stdin();
             stdin.read_line(&mut buf).unwrap();
@@ -165,9 +186,9 @@ impl MethodCall {
                 }
             }
             Value::Nil
-        }
+        } */
 
-        else if self.obj.0 == "math" && self.method.0 == "abs" {
+        if self.obj.0 == "math" && self.method.0 == "abs" {
             if let Some(Value::Number(n)) = self.args.first().map(|e| e.eval(ctx)) {
                 Value::Number(n.abs())
             } else { panic!() }
@@ -180,7 +201,11 @@ impl MethodCall {
         }
 
         else {
-            panic!("Method stuff is hacked together rn!");
+            if let Some(Value::Table(t)) = ctx.get_var(&self.obj) {
+                if let Some(Value::Function(f)) = t.borrow().get(&Value::String(self.method.0.clone())) {
+                    f.call(&self.args, ctx)
+                } else { panic!("method not found in object") }
+            } else { panic!("method object not found") }
         }
     }
 }

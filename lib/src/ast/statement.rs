@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt::{Debug, Display}};
+use std::{collections::HashMap, fmt::{Debug, Display}, rc::Rc};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall, MethodCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{flatten_values, Boolean, Value}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall, LuaFunction, MethodCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{flatten_values, Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
@@ -93,7 +93,7 @@ pub struct ForStatement {}
 #[derive(Clone)]
 pub struct FunctionDef {
     name: Identifier,
-    func: Function,
+    func: LuaFunction,
 }
 
 impl FunctionDef {
@@ -234,7 +234,7 @@ impl Statement {
             },
             Statement::FunctionDef(fdef) => {
                 // FIXME: THIS TREATS ALL FUNCTIONS AS GLOBALS
-                ctx.new_global(fdef.name.clone(), Value::Function(fdef.func.clone()));
+                ctx.new_global(fdef.name.clone(), Value::Function(Rc::new(Function::LuaFunction(fdef.func.clone()))));
             },
             Statement::FunctionCall(fcall) => {
                 fcall.call(ctx);
@@ -357,7 +357,7 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         ).unwrap();                                                                                                                                                                                                                                               
         let code = Block::parse(lex);
         let end_kw = lex.next();
-        let fdef = Statement::FunctionDef(FunctionDef { name, func: Function { args, code } });
+        let fdef = Statement::FunctionDef(FunctionDef { name, func: LuaFunction { args, code } });
         assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
 
         //println!("parsed function def!");
