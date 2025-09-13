@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{Debug, Display}, rc::Rc};
 
-use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall, LuaFunction, MethodCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{flatten_values, Boolean, Value}};
+use crate::{ast::{context::Ctx, expression::{parse_expression, Expression}, function::{Function, FunctionCall, LuaFunction, MethodCall}, parse_paren_list, Block}, lexer::{self, identifier::Identifier, seperator, Lexeme, Lexer}, value::{flatten_values, table::TableAssign, Boolean, Value}};
 
 #[derive(Clone)]
 pub struct Assignment {
@@ -143,6 +143,63 @@ impl Display for FunctionDef {
     }
 }
 
+#[derive(Clone)]
+pub struct MethodDef {
+    obj: Identifier,
+    method: Identifier,
+    func: LuaFunction,
+}
+
+impl MethodDef {
+    pub fn print_tree(&self, depth: usize) {
+        let tabs = "\t".repeat(depth);
+        println!("{tabs}MethodDef: [");
+        println!("{tabs}\tParent: {}", self.obj);
+        println!("{tabs}\tMethod: {}", self.method);
+        print!("{tabs}\tArgs: ");
+        if self.func.args.len() > 0 {
+            for arg in &self.func.args[0..(self.func.args.len() - 1)] {
+                print!("{tabs}{arg}, ");
+            }
+            println!("{tabs}{}", self.func.args[self.func.args.len() - 1]);
+        } else {
+            println!("{tabs}(Nothing)");
+        }
+        println!("{tabs}\tCode: ");
+        if let Some(b) = &self.func.code {
+            b.print_tree(depth + 2);
+        } else {
+            println!("{tabs}Nothing");
+        }
+        println!("{tabs}]");
+    }
+}
+
+impl Display for MethodDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "MethodDef: [")?;
+        writeln!(f, "\tParent: {}", self.obj)?;
+        writeln!(f, "\tMethod: {}", self.method)?;
+        write!(f, "\tArgs: ")?;
+        if self.func.args.len() > 0 {
+            for arg in &self.func.args[0..(self.func.args.len() - 1)] {
+                write!(f, "{arg}, ")?;
+            }
+            writeln!(f, "{}", self.func.args[self.func.args.len() - 1])?;
+        } else {
+            writeln!(f, "(Nothing)")?;
+        }
+        write!(f, "\tCode: ")?;
+        if let Some(b) = &self.func.code {
+            writeln!(f, "{b}")?;
+        } else {
+            writeln!(f, "Nothing")?;
+        }
+        write!(f, "]")
+    }
+}
+
+
 pub struct Break {} // ?
 
 #[derive(Clone)]
@@ -177,8 +234,11 @@ pub enum Statement {
     Conditional(Conditional),
     FunctionDef(FunctionDef),
     FunctionCall(FunctionCall),
+    MethodDef(MethodDef),
     MethodCall(MethodCall),
-    Return(Return)
+    Return(Return),
+    Do(Block),
+    TableAssign(TableAssign),
 }
 
 impl Display for Statement {
@@ -188,8 +248,11 @@ impl Display for Statement {
             Statement::Conditional(cond) => { write!(f, "{}", cond) },
             Statement::FunctionDef(fdef) => { write!(f, "{}", fdef) },
             Statement::FunctionCall(fcall) => { write!(f, "{}", fcall) },
+            Statement::MethodDef(mdef) => { write!(f, "{}", mdef) },
             Statement::MethodCall(mcall) => { write!(f, "{}", mcall) },
-            Statement::Return(r) => { write!(f, "{}", r) }
+            Statement::Return(r) => { write!(f, "{}", r) },
+            Statement::Do(d) => { write!(f, "Do [ {} ]", d) },
+            Statement::TableAssign(tassign) => {write!(f, "{}", tassign) }
         }
     }
 }
@@ -202,8 +265,16 @@ impl Statement {
             Statement::Conditional(cond) => { cond.print_tree(depth) },
             Statement::FunctionDef(fdef) => { fdef.print_tree(depth) },
             Statement::FunctionCall(fcall) => { fcall.print_tree(depth) },
+            Statement::MethodDef(mdef) => { mdef.print_tree(depth); }
             Statement::MethodCall(mcall) => { mcall.print_tree(depth) },
-            Statement::Return(r) => { r.print_tree(depth) }
+            Statement::Return(r) => { r.print_tree(depth) },
+            Statement::Do(d) => {
+                let tabs = "\t".repeat(depth);
+                println!("{tabs}Do [");
+                d.print_tree(depth + 1);
+                println!("{tabs}]")
+            },
+            Statement::TableAssign(t) => { t.print_tree(depth); }
         }
     }
 
@@ -244,8 +315,17 @@ impl Statement {
                 let rv = r.vals.iter().map(|exp| exp.eval(ctx)).collect();
                 ctx.ret(rv);
             }
+            Statement::MethodDef(mdef) => {
+                todo!()
+            }
             Statement::MethodCall(mcall) => {
                 mcall.call(ctx);
+            },
+            Statement::Do(block) => {
+                block.walk(ctx);
+            },
+            Statement::TableAssign(tassign) => {
+                tassign.walk(ctx);
             }
         }
     }
@@ -256,11 +336,21 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     // parse assignment
     let dup_lex = lex.clone();
 
+    if let Some(tassign) = TableAssign::parse(lex) {
+        return Some(Statement::TableAssign(tassign));
+    }
+    *lex = dup_lex;
+
     if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Local)) = lex.next() {
         if let Some(Statement::Assignment(mut assign)) = parse_statement(lex) {
             assign.local = true;
             return Some(Statement::Assignment(assign));
-        } else { panic!("Local without following assignment") }
+        } else { 
+            while let Some(l) = lex.next() {
+                eprintln!("Remaining lexeme: {l:?}");
+            }
+            panic!("Local without following assignment") 
+        }
     }
 
     *lex = dup_lex;
@@ -340,16 +430,16 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
     }
     *lex = dup_lex;
     // parse method call
-    if let Some(mcall) = MethodCall::parse(lex) {
+    if let Some(Expression::MethodCall(mcall)) = parse_expression(lex) 
+    {
         return Some(Statement::MethodCall(mcall));
     }
     *lex = dup_lex;
     // parse functiondef                                                                                                        
     if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Function)) = lex.next() 
         && let Some(Lexeme::Identifier(name)) = lex.next()
+        && lex.next() == Some(Lexeme::Seperator(seperator::Seperator::OpenParen))
     {
-        let oparen = lex.next();
-        
         let args = parse_paren_list(lex, |l| 
             if let Some(Lexeme::Identifier(ident)) = l.next() {
                 Some(ident)
@@ -361,6 +451,28 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
 
         //println!("parsed function def!");
+        return Some(fdef);
+    }
+    *lex = dup_lex;
+
+    // parse colondef
+    if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Function)) = lex.next() 
+        && let Some(Lexeme::Identifier(obj)) = lex.next()
+        && lex.next() == Some(Lexeme::Seperator(seperator::Seperator::Colon))
+        && let Some(Lexeme::Identifier(method)) = lex.next()
+    {
+        let _oparen = lex.next();
+
+        let mut args = vec![Identifier("self".to_string())];
+        args.append(&mut parse_paren_list(lex, |l| 
+            if let Some(Lexeme::Identifier(ident)) = l.next() {
+                Some(ident)
+            } else { None }
+        ).unwrap());
+        let code = Block::parse(lex);
+        let end_kw = lex.next();
+        let fdef = Statement::MethodDef(MethodDef { obj, method, func: LuaFunction { args, code } });
+        assert_eq!(end_kw, Some(Lexeme::Keyword(lexer::keyword::Keyword::End)));
         return Some(fdef);
     }
     *lex = dup_lex;
@@ -379,7 +491,13 @@ pub fn parse_statement(lex: &mut Lexer) -> Option<Statement> {
         return Some(Statement::Return(Return { vals }));
     }
     *lex = dup_lex;
-    //eprintln!("{:?}", lex.clone().peekable().peek());
-    //todo!()
+    
+    if let Some(Lexeme::Keyword(lexer::keyword::Keyword::Do)) = lex.next() {
+        let b = Block::parse(lex).expect("valid block should follow do statement");
+        let _ = lex.next(); // get rid of 'end'
+        return Some(Statement::Do(b));
+    }
+
+    *lex = dup_lex;
     None
 }

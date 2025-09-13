@@ -87,8 +87,13 @@
 
 use crate::{ast::*, lexer::Lexer};
 
-pub fn parse(source: &str) -> Option<Block> {
+pub fn parse(mut source: &str) -> Option<Block> {
     // do other things?
+    if &source[..2] == "#!" {
+        // get rid of of shebang
+        let nextl = source.find('\n').expect("source file with shebang should be non-empty");
+        source = &source[nextl + 1..]; 
+    }
     let mut lex = Lexer::new(source);
     let block = Block::parse(&mut lex);
     while let Some(lexeme) = lex.next() {

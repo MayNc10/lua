@@ -39,7 +39,7 @@ impl Ctx {
         self.level += 1;
     }
 
-    pub fn leave_block(&mut self) -> Vec<Value> {
+    pub fn leave_block_noreturn(&mut self) {
         self.level -= 1;
         // get rid of old locals
         // there must be a better way to do this
@@ -54,6 +54,10 @@ impl Ctx {
         for ident in completely_empty {
             self.locals.remove(&ident);
         }
+    }
+
+    pub fn leave_block(&mut self) -> Vec<Value> {
+        self.leave_block_noreturn();
         self.ret_vals.split_off(0)
     }
 

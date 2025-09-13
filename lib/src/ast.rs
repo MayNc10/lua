@@ -54,12 +54,15 @@ impl Block {
     }
 
     pub fn walk(&self, ctx: &mut Ctx) {
+        ctx.enter_block();
         for st in &self.statements {
             st.walk(ctx);
             if ctx.did_return() {
+                ctx.leave_block_noreturn();
                 return;
             }
         }
+        ctx.leave_block_noreturn();
     }
 }
 

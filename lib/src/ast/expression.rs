@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::{Debug, Display}, io};
 
-use crate::{ast::{context::Ctx, function::{FunctionCall, MethodCall}}, lexer::{self, Lexeme, Lexer, identifier::{self, Identifier}, literal, operator, seperator}, value::Value};
+use crate::{ast::{context::Ctx, function::{FunctionCall, MethodCall}}, lexer::{self, identifier::{self, Identifier}, literal, operator, seperator, Lexeme, Lexer}, value::{table::{TableAccess, TableConstructor}, Value}};
 
 pub struct TableExpression {}
 
@@ -73,8 +73,9 @@ pub enum Expression {
     FuncCall(FunctionCall),
     MethodCall(MethodCall),
     BinaryExp(BinaryExpression),
-    UnaryExp(UnaryExpression)
-    // TODO: TABLES!
+    UnaryExp(UnaryExpression),
+    TableAccess(TableAccess),
+    TableConstructor(TableConstructor)
 }
 
 impl Expression {
@@ -269,6 +270,11 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     seperator::Seperator::OpenParen => {
                         lex.next();
                         opened_parens += 1;
+                        if last_was_arg {
+                            eprintln!("hit error line 274, stacks are:");
+                            eprintln!("operands: {operands:?}");
+                            eprintln!("operations: {operations:?}");
+                        }
                         assert!(!last_was_arg);
                         last_was_arg = false;
                         operations.push(ExpOperation::OpenParen);
@@ -281,10 +287,60 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                         }
                         lex.next();
                         last_was_arg = true;
-                        operations.push(ExpOperation::CloseParen);
+                        // collapse this paren if we're just wrapping a single operand
+                        // is this sound?
+                        if operations.last() == Some(&ExpOperation::OpenParen) {
+                            operations.pop();
+                        } else {
+                            operations.push(ExpOperation::CloseParen);
+                        }
                     },
                     seperator::Seperator::OpenBracket | seperator::Seperator::CloseBracket => {
                         todo!()
+                    }
+                    seperator::Seperator::OpenCurly => {
+                        if let Some(tc) = TableConstructor::parse(lex) {
+                            operands.push(Expression::TableConstructor(tc));
+                            last_was_arg = true;
+                        } else { todo!() }
+                    }
+                    seperator::Seperator::Colon => {
+                        // kinda hacky
+                        // fixme!
+                        lex.next();
+                        if let Some(op) = operands.last() {
+                            let obj = operands.pop().unwrap();
+                            let func = FunctionCall::parse(lex).expect("functioncall should follow colon");
+                            let mut args = vec![obj.clone()];
+                            args.extend(func.args().iter().map(|e| e.clone()));
+                            let mcall = MethodCall::new(obj, func.name().clone(), args);
+                            operands.push(Expression::MethodCall(mcall));
+                            last_was_arg = true;
+                        } else {
+                            todo!("colon operator didn't have preceding argument!");
+                        }
+                    }
+                    seperator::Seperator::Dot => {
+                        lex.next();
+                        if let Some(op) = operands.last() {
+                            let obj = operands.pop().unwrap();
+                            if let Some(func) = FunctionCall::parse(lex) {
+                                let mcall = MethodCall::new(obj, func.name().clone(), func.args().clone());
+                                operands.push(Expression::MethodCall(mcall));
+                            }
+                            else {
+                                if let Some(Lexeme::Identifier(field)) = lex.next() {
+                                    let taccess = TableAccess::new_dot(obj, field);
+                                    operands.push(Expression::TableAccess(taccess));
+                                } else {
+                                    panic!("Dot operator without function call or field afterwards!");
+                                }
+                            }
+                            
+                            last_was_arg = true;
+                        } else {
+                            todo!("colon operator didn't have preceding argument!");
+                        }
                     }
                     _ => break
                 }
@@ -299,10 +355,12 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                     operands.push(Expression::FuncCall(funccall));
                     *lex = dup_lex;
                 }
+                /* 
                 else if let Some(mcall) = MethodCall::parse({ dup_lex = lex.clone(); &mut dup_lex }) {
                     operands.push(Expression::MethodCall(mcall));
                     *lex = dup_lex;
                 }
+                */
                 else {
                     lex.next();
                     operands.push(Expression::Identifier(ident.clone()));
@@ -390,7 +448,7 @@ pub fn parse_expression(lex: &mut Lexer) -> Option<Expression> {
                 break 
             }
         }
-    } 
+    }
 
     while let Some(op) = operations.pop() {
         if op == ExpOperation::UnaryMinus {
